@@ -1,0 +1,15 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; width: 100%; }
+    html { overflow-x: hidden; }
+    body { background: var(--bg,#F8F9FA); font-family: var(--font, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif); -webkit-tap-highlight-color: transparent; overflow-x: hidden; overflow-y: hidden; width: 100%; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overscroll-behavior: none; }
+    #root { overflow: hidden; }
+    input, select, textarea { font-size: 16px !important; font-family: inherit; max-width: 100%; min-width: 0; box-sizing: border-box; }
+    input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; width: 100%; }
+    textarea:focus, input:focus, select:focus { outline: none; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    @keyframes tlSlideUp { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+    @media (max-width: 900px) {
+      /* スマホで日付フィールドを1列に */
+      [data-date-grid] { grid-template-columns: 1fr !important; }
+    }
