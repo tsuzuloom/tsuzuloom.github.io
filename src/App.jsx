@@ -223,6 +223,10 @@ const IS = () => ({ width:"100%",padding:"10px 12px",border:`0.5px solid ${C.bor
 const DateInp = ({ label, value, onChange, cal }) => {
   const [showPicker,setShowPicker]=useState(false);
   const [textInput,setTextInput]=useState(value||"");
+  
+  useEffect(() => {
+    setTextInput(value || "");
+  }, [value]);
   const clear=(
     <button type="button" onClick={()=>{ onChange(""); setTextInput(""); }} disabled={!value} style={{ flexShrink:0,padding:"0 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:value?C.sub:C.hint,opacity:value?1:0.4,cursor:value?"pointer":"default",fontFamily:"inherit",fontSize:11.5,minHeight:42 }}>消す</button>
   );
