@@ -227,9 +227,6 @@ const DateInp = ({ label, value, onChange, cal }) => {
   useEffect(() => {
     setTextInput(value || "");
   }, [value]);
-  const clear=(
-    <button type="button" onClick={()=>{ onChange(""); setTextInput(""); }} disabled={!value} style={{ flexShrink:0,padding:"0 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:value?C.sub:C.hint,opacity:value?1:0.4,cursor:value?"pointer":"default",fontFamily:"inherit",fontSize:11.5,minHeight:42 }}>消す</button>
-  );
   
   const handleTextChange=(text)=>{ 
     setTextInput(text); 
@@ -237,9 +234,9 @@ const DateInp = ({ label, value, onChange, cal }) => {
     if(parsed) onChange(joinYMD(parsed)); 
   };
   
-  const t=parseYMD(value)||{y:"",m:1,d:1};
+  const t=parseYMD(value)||{y:new Date().getFullYear(),m:new Date().getMonth()+1,d:new Date().getDate()};
   const set=(patch)=>{ 
-    const n={y:t.y===""?1:t.y,m:t.m,d:t.d,...patch}; 
+    const n={y:t.y,m:t.m,d:t.d,...patch}; 
     if(cal&&cal.enabled){ const md=cal.months[n.m-1]; if(md&&n.d>md.days) n.d=md.days; }
     const ymd=joinYMD(n);
     onChange(ymd); 
@@ -260,28 +257,42 @@ const DateInp = ({ label, value, onChange, cal }) => {
             placeholder="例: 2021/1/1" 
             style={{ ...IS(),flex:1,minWidth:0 }}
           />
-          {clear}
+          <button type="button" onClick={()=>{ onChange(""); setTextInput(""); }} disabled={!value} style={{ flexShrink:0,padding:"0 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:value?C.sub:C.hint,opacity:value?1:0.4,cursor:value?"pointer":"default",fontFamily:"inherit",fontSize:11.5,minHeight:42 }}>消す</button>
           
           {showPicker&&(
             <div style={{ position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:9998,display:"flex",alignItems:"flex-end",justifyContent:"center" }} onClick={()=>setShowPicker(false)}>
-              <div style={{ background:C.surface,borderRadius:"14px 14px 0 0",width:"100%",maxWidth:480,padding:"20px 16px 16px",zIndex:9999,boxShadow:"0 -2px 16px rgba(0,0,0,0.15)" }} onClick={e=>e.stopPropagation()}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
-                  <button onClick={()=>set({m:t.m-1})} disabled={t.m<=1} style={{ border:"none",background:"transparent",cursor:t.m<=1?"default":"pointer",opacity:t.m<=1?0.3:1,fontSize:20,padding:0,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
-                  <div style={{ fontSize:16,fontWeight:600,color:C.text,flex:1,textAlign:"center" }}>{t.y}年 {cal.months[t.m-1]?.name||t.m+"月"}</div>
-                  <button onClick={()=>set({m:t.m+1})} disabled={t.m>=12} style={{ border:"none",background:"transparent",cursor:t.m>=12?"default":"pointer",opacity:t.m>=12?0.3:1,fontSize:20,padding:0,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
+              <div style={{ background:C.surface,borderRadius:"14px 14px 0 0",width:"100%",maxWidth:480,padding:"16px",zIndex:9999,boxShadow:"0 -2px 16px rgba(0,0,0,0.15)" }} onClick={e=>e.stopPropagation()}>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:11,color:C.hint,fontWeight:600,letterSpacing:"0.05em",marginBottom:6 }}>日付を入力</div>
+                  <input 
+                    type="text" 
+                    value={textInput} 
+                    onChange={e=>handleTextChange(e.target.value)} 
+                    placeholder="例: 2021/1/1" 
+                    style={{ ...IS(),width:"100%",padding:"10px 12px",fontSize:14 }}
+                  />
                 </div>
                 
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:16 }}>
-                  {["日","月","火","水","木","金","土"].map(d=><div key={d} style={{ textAlign:"center",fontSize:11,color:C.hint,fontWeight:600,height:32,display:"flex",alignItems:"center",justifyContent:"center" }}>{d}</div>)}
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingBottom:12,borderBottom:`0.5px solid ${C.borderL}` }}>
+                  <button onClick={()=>set({m:Math.max(1,t.m-1)})} style={{ border:"none",background:"transparent",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center" }}><Ico n="chevL" s={16} c={C.text}/></button>
+                  <div style={{ fontSize:15,fontWeight:600,color:C.text,textAlign:"center",minWidth:120 }}>{t.y}年 {cal.months[t.m-1]?.name||t.m+"月"}</div>
+                  <button onClick={()=>set({m:Math.min(cal.months.length,t.m+1)})} style={{ border:"none",background:"transparent",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center" }}><Ico n="chevR" s={16} c={C.text}/></button>
+                </div>
+                
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:14,textAlign:"center" }}>
+                  {["日","月","火","水","木","金","土"].map(d=><div key={d} style={{ fontSize:10,color:C.hint,fontWeight:600,height:24,display:"flex",alignItems:"center",justifyContent:"center" }}>{d}</div>)}
                   {Array.from({length:days},(_,i)=>{
                     const isSelected=t.d===i+1;
                     return (
-                      <button key={i} onClick={()=>{ set({d:i+1}); setShowPicker(false); }} style={{ border:isSelected?`2px solid ${C.accent}`:`0.5px solid ${C.border}`,background:isSelected?C.accent+"12":C.surface,borderRadius:8,padding:0,height:40,fontSize:13,color:isSelected?C.accent:C.text,fontWeight:isSelected?600:400,cursor:"pointer",fontFamily:"inherit" }}>{i+1}</button>
+                      <button key={i} onClick={()=>{ set({d:i+1}); }} style={{ border:"none",background:isSelected?C.accent:"transparent",borderRadius:isSelected?8:4,padding:"8px 0",height:32,fontSize:12,color:isSelected?C.accentFg:C.text,fontWeight:isSelected?600:400,cursor:"pointer",fontFamily:"inherit" }}>{i+1}</button>
                     );
                   })}
                 </div>
                 
-                <button onClick={()=>setShowPicker(false)} style={{ width:"100%",padding:"11px 16px",borderRadius:10,border:"none",background:C.accent,color:"white",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>決定</button>
+                <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
+                  {value&&<Btn small variant="ghost" onClick={()=>{ onChange(""); setTextInput(""); setShowPicker(false); }}>クリア</Btn>}
+                  <Btn small variant="primary" onClick={()=>setShowPicker(false)}>完了</Btn>
+                </div>
               </div>
             </div>
           )}
@@ -300,11 +311,12 @@ const DateInp = ({ label, value, onChange, cal }) => {
           placeholder="例: 2021/1/1" 
           style={{ ...IS(), minWidth:0, flex:1 }}
         />
-        {clear}
+        <button type="button" onClick={()=>{ onChange(""); setTextInput(""); }} disabled={!value} style={{ flexShrink:0,padding:"0 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:value?C.sub:C.hint,opacity:value?1:0.4,cursor:value?"pointer":"default",fontFamily:"inherit",fontSize:11.5,minHeight:42 }}>消す</button>
       </div>
     </Field>
   );
 };
+
 const Inp = ({ label, value, onChange, type="text", placeholder, rows }) => <Field label={label}>{rows?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...IS(),resize:"vertical" }}/>:<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{ ...IS(), WebkitAppearance:"none", appearance:"none", minWidth:0 }}/>}</Field>;
 const Sel = ({ label, value, onChange, options }) => <Field label={label}><select value={value} onChange={e=>onChange(e.target.value)} style={{ ...IS(),cursor:"pointer" }}><option value="">-- 未選択 --</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>;
 const Btn = ({ children, onClick, variant="default", small, icon, full, accent }) => { const ac=accent||C.accent; const vs={default:{bg:"transparent",cl:C.text,br:`0.5px solid ${C.hint}`},primary:{bg:ac+"12",cl:ac,br:`0.5px solid ${ac}`},danger:{bg:C.danger+"10",cl:C.danger,br:`0.5px solid ${C.danger}`},ghost:{bg:"transparent",cl:C.sub,br:"none"}}; const v=vs[variant]||vs.default; return <button onClick={onClick} style={{ display:"inline-flex",alignItems:"center",gap:5,padding:small?"8px 12px":"11px 16px",borderRadius:10,border:v.br,background:v.bg,color:v.cl,fontSize:small?12:13,fontWeight:500,lineHeight:1.6,minHeight:small?36:44,boxSizing:"border-box",cursor:"pointer",fontFamily:"inherit",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",whiteSpace:"nowrap" }}>{icon&&<Ico n={icon} s={small?13:15} c={v.cl}/>}{children}</button>; };
