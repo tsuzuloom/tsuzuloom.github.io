@@ -223,7 +223,9 @@ const IS = () => ({ width:"100%",padding:"10px 12px",border:`0.5px solid ${C.bor
 const DateInp = ({ label, value, onChange, cal }) => {
   const useCal = !!(cal && cal.enabled);
   const [showPicker,setShowPicker]=useState(false);
+  const [yearMode,setYearMode]=useState(false);
   const [textInput,setTextInput]=useState(value||"");
+  const yearBoxRef=useRef(null);
   useEffect(()=>{ setTextInput(value||""); },[value]);
 
   const today=new Date();
@@ -236,6 +238,17 @@ const DateInp = ({ label, value, onChange, cal }) => {
   const firstDow = useCal ? 0 : new Date(t.y, t.m-1, 1).getDay();
   const monthName = useCal ? ((cal.months[t.m-1]||{}).name || `${t.m}月`) : `${t.m}月`;
 
+  const yStart = Math.max(1, t.y-130);
+  const yEnd = t.y+30;
+  const years = Array.from({length:yEnd-yStart+1},(_,i)=>yStart+i);
+
+  // 年の一覧を開いたら、いま選ばれている年のあたりまで自動で送る
+  useEffect(()=>{
+    if(!yearMode||!yearBoxRef.current) return;
+    const row=Math.floor((t.y-yStart)/4);
+    yearBoxRef.current.scrollTop=Math.max(0,row*44-90);
+  },[yearMode]);
+
   const commit=(n)=>{ const ymd=joinYMD(n); onChange(ymd); setTextInput(ymd); };
   const set=(patch)=>{
     const n={y:t.y,m:t.m,d:t.d,...patch};
@@ -247,6 +260,7 @@ const DateInp = ({ label, value, onChange, cal }) => {
   };
   const handleTextChange=(text)=>{ setTextInput(text); const p=parseFlexibleDate(text); if(p) onChange(joinYMD(p)); };
   const clearAll=()=>{ onChange(""); setTextInput(""); };
+  const closePicker=()=>{ setShowPicker(false); setYearMode(false); };
 
   const navBtn=(icon,onClick)=>(
     <button type="button" onClick={onClick} style={{ border:"none",background:"transparent",cursor:"pointer",padding:"6px 7px",display:"flex",alignItems:"center",borderRadius:8 }}><Ico n={icon} s={15} c={C.sub}/></button>
@@ -267,42 +281,56 @@ const DateInp = ({ label, value, onChange, cal }) => {
       </div>
 
       {showPicker&&(
-        <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"flex-end",justifyContent:"center" }} onClick={e=>{ if(e.target===e.currentTarget) setShowPicker(false); }}>
+        <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"flex-end",justifyContent:"center" }} onClick={e=>{ if(e.target===e.currentTarget) closePicker(); }}>
           <div style={{ background:C.surface,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:420,padding:"14px 14px calc(14px + env(safe-area-inset-bottom,0px))",boxShadow:"0 -4px 22px rgba(0,0,0,0.18)" }}>
 
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
               <div style={{ display:"flex",alignItems:"center",gap:1 }}>
                 {navBtn("chevL",()=>set({y:t.y-1}))}
-                <span style={{ fontSize:14,fontWeight:600,color:C.text,minWidth:62,textAlign:"center" }}>{cal&&cal.yearLabel?cal.yearLabel:""}{t.y}年</span>
+                <button type="button" onClick={()=>setYearMode(v=>!v)} style={{ display:"flex",alignItems:"center",gap:3,border:"none",background:yearMode?C.accent+"14":"transparent",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontFamily:"inherit" }}>
+                  <span style={{ fontSize:14,fontWeight:600,color:yearMode?C.accent:C.text }}>{useCal&&cal.yearLabel?cal.yearLabel:""}{t.y}年</span>
+                  <Ico n={yearMode?"chevU":"chevD"} s={12} c={yearMode?C.accent:C.hint}/>
+                </button>
                 {navBtn("chevR",()=>set({y:t.y+1}))}
               </div>
-              <div style={{ display:"flex",alignItems:"center",gap:1 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:1,opacity:yearMode?0.35:1,pointerEvents:yearMode?"none":"auto" }}>
                 {navBtn("chevL",()=>set({m:t.m-1}))}
-                <span style={{ fontSize:14,fontWeight:600,color:C.text,minWidth:58,textAlign:"center" }}>{monthName}</span>
+                <span style={{ fontSize:14,fontWeight:600,color:C.text,minWidth:52,textAlign:"center" }}>{monthName}</span>
                 {navBtn("chevR",()=>set({m:t.m+1}))}
               </div>
             </div>
 
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:10 }}>
-              {!useCal&&["日","月","火","水","木","金","土"].map((d,i)=>(
-                <div key={d} style={{ height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:600,color:i===0?"#C0392B":(i===6?"#3B5BA8":C.hint) }}>{d}</div>
-              ))}
-              {Array.from({length:firstDow},(_,i)=><div key={"b"+i}/>)}
-              {Array.from({length:daysInMonth},(_,i)=>{
-                const day=i+1;
-                const sel=!!value&&t.d===day;
-                const isToday=!useCal&&t.y===today.getFullYear()&&t.m===today.getMonth()+1&&day===today.getDate();
-                return (
-                  <button key={day} type="button" onClick={()=>set({d:day})} style={{ height:36,borderRadius:9,border:isToday&&!sel?`1px solid ${C.accent}`:"none",background:sel?C.accent:"transparent",color:sel?C.accentFg:C.text,fontSize:13,fontWeight:sel?700:400,cursor:"pointer",fontFamily:"inherit",padding:0 }}>{day}</button>
-                );
-              })}
-            </div>
+            {yearMode?(
+              <div ref={yearBoxRef} style={{ height:236,overflowY:"auto",WebkitOverflowScrolling:"touch",marginBottom:10,paddingRight:2 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6 }}>
+                  {years.map(y=>{
+                    const sel=y===t.y;
+                    return <button key={y} type="button" onClick={()=>{ set({y}); setYearMode(false); }} style={{ height:38,borderRadius:9,border:"none",background:sel?C.accent:"transparent",color:sel?C.accentFg:C.text,fontSize:13,fontWeight:sel?700:400,cursor:"pointer",fontFamily:"inherit",padding:0 }}>{y}</button>;
+                  })}
+                </div>
+              </div>
+            ):(
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:10 }}>
+                {!useCal&&["日","月","火","水","木","金","土"].map((d,i)=>(
+                  <div key={d} style={{ height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:600,color:i===0?"#C0392B":(i===6?"#3B5BA8":C.hint) }}>{d}</div>
+                ))}
+                {Array.from({length:firstDow},(_,i)=><div key={"b"+i}/>)}
+                {Array.from({length:daysInMonth},(_,i)=>{
+                  const day=i+1;
+                  const sel=!!value&&t.d===day;
+                  const isToday=!useCal&&t.y===today.getFullYear()&&t.m===today.getMonth()+1&&day===today.getDate();
+                  return (
+                    <button key={day} type="button" onClick={()=>set({d:day})} style={{ height:36,borderRadius:9,border:isToday&&!sel?`1px solid ${C.accent}`:"none",background:sel?C.accent:"transparent",color:sel?C.accentFg:C.text,fontSize:13,fontWeight:sel?700:400,cursor:"pointer",fontFamily:"inherit",padding:0 }}>{day}</button>
+                  );
+                })}
+              </div>
+            )}
 
             <div style={{ display:"flex",alignItems:"center",gap:8,paddingTop:10,borderTop:`0.5px solid ${C.borderL}` }}>
-              {!useCal&&<Btn small variant="ghost" onClick={()=>commit({y:today.getFullYear(),m:today.getMonth()+1,d:today.getDate()})}>今日</Btn>}
+              {!useCal&&!yearMode&&<Btn small variant="ghost" onClick={()=>commit({y:today.getFullYear(),m:today.getMonth()+1,d:today.getDate()})}>今日</Btn>}
               <div style={{ flex:1 }}/>
-              {value&&<Btn small variant="ghost" onClick={()=>{ clearAll(); setShowPicker(false); }}>クリア</Btn>}
-              <Btn small variant="primary" onClick={()=>setShowPicker(false)}>完了</Btn>
+              {value&&<Btn small variant="ghost" onClick={()=>{ clearAll(); closePicker(); }}>クリア</Btn>}
+              <Btn small variant="primary" onClick={closePicker}>完了</Btn>
             </div>
 
           </div>
