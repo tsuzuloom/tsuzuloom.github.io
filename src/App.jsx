@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "B4.3";
+const APP_VERSION = "B4.4";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -210,6 +210,7 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     moon:<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>,
     sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
     grid:<><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
+    filter:<><path d="M4 5.5h16l-6.2 7.3V19l-3.6 1.8v-8L4 5.5z"/></>,
     list:<><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></>,
   };
   return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{d[n]||null}</svg>;
@@ -487,7 +488,7 @@ const EmptyState = ({ icon, title, onAdd, actionLabel }) => (
 
 const EntityCard = ({ icon, iconColor, name, subtitle, tags, onClick, onDelete, onMoveUp, onMoveDown, image }) => (<div onClick={onClick} style={{ display:"flex",alignItems:"center",padding:"11px 14px",borderBottom:`0.5px solid ${C.borderL}`,cursor:"pointer",background:C.surface,gap:10,minHeight:44 }}>{(onMoveUp!==undefined||onMoveDown!==undefined)&&(<div style={{ display:"flex",flexDirection:"column",gap:1,flexShrink:0 }}><button onClick={e=>{e.stopPropagation();onMoveUp&&onMoveUp();}} style={{ border:"none",background:"transparent",cursor:onMoveUp?"pointer":"default",padding:"3px 3px",opacity:onMoveUp?0.5:0.15,lineHeight:0 }}><Ico n="chevU" s={13} c={C.text}/></button><button onClick={e=>{e.stopPropagation();onMoveDown&&onMoveDown();}} style={{ border:"none",background:"transparent",cursor:onMoveDown?"pointer":"default",padding:"3px 3px",opacity:onMoveDown?0.5:0.15,lineHeight:0 }}><Ico n="chevD" s={13} c={C.text}/></button></div>)}<div style={{ width:38,height:38,borderRadius:10,background:C.bg,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden" }}>{image?<img src={image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<Ico n={icon} s={17} c={iconColor||C.hint}/>}</div><div style={{ flex:1,minWidth:0 }}><div style={{ fontFamily:C.display,fontSize:14,color:C.text,marginBottom:1 }}>{name||"（無題）"}</div>{subtitle&&<div style={{ fontSize:11,color:C.sub }}>{subtitle}</div>}{tags&&tags.length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginTop:3 }}>{tags.slice(0,3).map((t,i)=><Tag key={i} label={t.label} color={t.color}/>)}</div>}</div><div style={{ display:"flex",gap:2,flexShrink:0,alignItems:"center" }}><button onClick={e=>{e.stopPropagation();onDelete();}} style={{ background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",opacity:0.35 }}><Ico n="trash" s={14} c={C.text}/></button><Ico n="chevR" s={15} c={C.hint}/></div></div>);
 
-const EntityList = ({ title, icon, iconColor, items, onAdd, onEdit, onDelete, renderName, renderSubtitle, renderTags, renderImage, onMoveUp, onMoveDown, headerExtra, subHeader, body }) => (<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}><div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:`0.5px solid ${C.border}`,background:C.surface,flexShrink:0 }}><div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}><Ico n={icon} s={15} c={iconColor||C.hint}/><span style={{ fontFamily:C.display,fontSize:15,color:C.text }}>{title}</span><span style={{ fontSize:11,color:C.hint }}>{items.length}</span></div><div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>{headerExtra}<button onClick={onAdd} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 13px",background:"transparent",color:C.text,border:`0.5px solid ${C.hint}`,borderRadius:20,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="plus" s={12} c={C.text}/>追加</button></div></div>{subHeader&&<div style={{ padding:"8px 12px",borderBottom:`0.5px solid ${C.borderL}`,background:C.surface,flexShrink:0 }}>{subHeader}</div>}<div style={{ flex:1,overflowY:"auto",background:C.surface }}>{items.length===0?<EmptyState icon={icon} title={title} onAdd={onAdd}/>:(body||items.map((item,i)=><EntityCard key={item.id} icon={icon} iconColor={item.imageColor||item.color||iconColor} image={renderImage?renderImage(item):null} name={renderName(item)} subtitle={renderSubtitle?renderSubtitle(item):null} tags={renderTags?renderTags(item):null} onClick={()=>onEdit(item)} onDelete={()=>onDelete(item.id)} onMoveUp={onMoveUp&&i>0?()=>onMoveUp(i):onMoveUp!==undefined?null:undefined} onMoveDown={onMoveDown&&i<items.length-1?()=>onMoveDown(i):onMoveDown!==undefined?null:undefined}/>))}</div></div>);
+const EntityList = ({ title, icon, iconColor, items, onAdd, onEdit, onDelete, renderName, renderSubtitle, renderTags, renderImage, onMoveUp, onMoveDown, headerExtra, subHeader, body, emptyEl }) => (<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}><div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:`0.5px solid ${C.border}`,background:C.surface,flexShrink:0 }}><div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}><Ico n={icon} s={15} c={iconColor||C.hint}/><span style={{ fontFamily:C.display,fontSize:15,color:C.text }}>{title}</span><span style={{ fontSize:11,color:C.hint }}>{items.length}</span></div><div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>{headerExtra}<button onClick={onAdd} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 13px",background:"transparent",color:C.text,border:`0.5px solid ${C.hint}`,borderRadius:20,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="plus" s={12} c={C.text}/>追加</button></div></div>{subHeader&&<div style={{ padding:"8px 12px",borderBottom:`0.5px solid ${C.borderL}`,background:C.surface,flexShrink:0 }}>{subHeader}</div>}<div style={{ flex:1,overflowY:"auto",background:C.surface }}>{items.length===0?(emptyEl||<EmptyState icon={icon} title={title} onAdd={onAdd}/>):(body||items.map((item,i)=><EntityCard key={item.id} icon={icon} iconColor={item.imageColor||item.color||iconColor} image={renderImage?renderImage(item):null} name={renderName(item)} subtitle={renderSubtitle?renderSubtitle(item):null} tags={renderTags?renderTags(item):null} onClick={()=>onEdit(item)} onDelete={()=>onDelete(item.id)} onMoveUp={onMoveUp&&i>0?()=>onMoveUp(i):onMoveUp!==undefined?null:undefined} onMoveDown={onMoveDown&&i<items.length-1?()=>onMoveDown(i):onMoveDown!==undefined?null:undefined}/>))}</div></div>);
 
 // ===================== LOGIN =====================
 const RESET_REDIRECT = "https://tsuzuloom.github.io/";
@@ -1660,6 +1661,8 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const [charViewId,setCharViewId]=useState((route&&route.charId)||null);
   const [charLayout,setCharLayout]=useState(localStorage.getItem("tl_charLayout")||"list");
   const [charSort,setCharSort]=useState({key:"manual",asc:true});
+  const [charFilterOpen,setCharFilterOpen]=useState(false);
+  const [charFilter,setCharFilter]=useState({chapterId:"",groupId:""});
   const isDesktop=useIsDesktop();
 
   // URLの画面キーを、スマホのタブ／PCのサイドバー選択に翻訳する
@@ -1832,20 +1835,84 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     return cs;
   })();
   const manualOrder = charSort.key==="manual";
+
+  // 章に出てくる人物：章 → その章のシーン → 各シーンの登場人物、を集めて重複を除く
+  const charIdsInChapter=(chapterId)=>{
+    const ch=data.chapters.find(c=>c.id===chapterId);
+    if(!ch) return null;
+    const sceneIds=new Set(ch.relatedScenes||[]);
+    data.scenes.forEach(s=>{ if(s.relatedChapterId===chapterId) sceneIds.add(s.id); });
+    const ids=new Set();
+    data.scenes.forEach(s=>{ if(sceneIds.has(s.id)) (s.relatedCharacters||[]).forEach(id=>ids.add(id)); });
+    return ids;
+  };
+  const filterByChapter = charFilter.chapterId ? charIdsInChapter(charFilter.chapterId) : null;
+  const filterByGroup = (()=>{ if(!charFilter.groupId) return null; const g=data.groups.find(x=>x.id===charFilter.groupId); return new Set(g?(g.relatedCharacters||[]):[]); })();
+  const charFilterActive = !!(filterByChapter||filterByGroup);
+  const shownChars = sortedChars.filter(c=>(!filterByChapter||filterByChapter.has(c.id))&&(!filterByGroup||filterByGroup.has(c.id)));
+  const canReorder = manualOrder && !charFilterActive;
+  const chapterLabel=(id)=>{ const c=data.chapters.find(x=>x.id===id); return c?(c.title||"（無題）"):""; };
+  const groupLabel=(id)=>{ const g=data.groups.find(x=>x.id===id); return g?(g.name||"（無名）"):""; };
+  const clearCharFilter=()=>setCharFilter({chapterId:"",groupId:""});
+
   const charSortBar=(
-    <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-      <span style={{ fontSize:10.5,color:C.hint,flexShrink:0,letterSpacing:"0.05em" }}>並び</span>
-      <select value={charSort.key} onChange={e=>setCharSort(v=>({...v,key:e.target.value}))} style={{ ...IS(),flex:1,minWidth:0,padding:"7px 9px",cursor:"pointer" }}>
-        <option value="manual">登録順（自分で並べ替え）</option>
-        <option value="name">名前（ふりがな）</option>
-        <option value="birth">生まれた順</option>
-        {data.parameters.map(p=><option key={p.id} value={"p:"+p.id}>{p.name||"（無名）"}</option>)}
-      </select>
-      <button onClick={()=>setCharSort(v=>({...v,asc:!v.asc}))} disabled={manualOrder} style={{ flexShrink:0,padding:"0 12px",minHeight:38,borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:manualOrder?C.hint:C.sub,opacity:manualOrder?0.35:1,cursor:manualOrder?"default":"pointer",fontFamily:"inherit",fontSize:11.5 }}>{charSort.asc?"小さい順":"大きい順"}</button>
+    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+      <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+        <span style={{ fontSize:10.5,color:C.hint,flexShrink:0,letterSpacing:"0.05em" }}>並び</span>
+        <select value={charSort.key} onChange={e=>setCharSort(v=>({...v,key:e.target.value}))} style={{ ...IS(),flex:1,minWidth:0,padding:"7px 9px",cursor:"pointer" }}>
+          <option value="manual">登録順（自分で並べ替え）</option>
+          <option value="name">名前（ふりがな）</option>
+          <option value="birth">生まれた順</option>
+          {data.parameters.map(p=><option key={p.id} value={"p:"+p.id}>{p.name||"（無名）"}</option>)}
+        </select>
+        <button onClick={()=>setCharSort(v=>({...v,asc:!v.asc}))} disabled={manualOrder} style={{ flexShrink:0,padding:"0 12px",minHeight:38,borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:manualOrder?C.hint:C.sub,opacity:manualOrder?0.35:1,cursor:manualOrder?"default":"pointer",fontFamily:"inherit",fontSize:11.5 }}>{charSort.asc?"小さい順":"大きい順"}</button>
+        <button onClick={()=>setCharFilterOpen(o=>!o)} style={{ flexShrink:0,display:"flex",alignItems:"center",gap:5,padding:"0 11px",minHeight:38,borderRadius:10,border:`0.5px solid ${charFilterActive?"transparent":C.border}`,background:charFilterActive?SECTIONS.characters.color:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:11.5,color:charFilterActive?"#fff":C.sub }}>
+          <Ico n="filter" s={13} c={charFilterActive?"#fff":C.sub}/>絞り込み
+        </button>
+      </div>
+
+      {charFilterOpen&&(
+        <div style={{ background:C.bg,borderRadius:11,padding:"11px 11px 12px",display:"flex",flexDirection:"column",gap:9 }}>
+          <div style={{ display:"flex",gap:7,alignItems:"center" }}>
+            <span style={{ fontSize:10.5,color:C.hint,flexShrink:0,width:24 }}>章</span>
+            <select value={charFilter.chapterId} onChange={e=>setCharFilter(v=>({...v,chapterId:e.target.value}))} style={{ ...IS(),flex:1,minWidth:0,padding:"7px 9px",cursor:"pointer",background:C.surface }}>
+              <option value="">すべての章</option>
+              {data.chapters.map(c=><option key={c.id} value={c.id}>{c.title||"（無題）"}</option>)}
+            </select>
+          </div>
+          <div style={{ display:"flex",gap:7,alignItems:"center" }}>
+            <span style={{ fontSize:10.5,color:C.hint,flexShrink:0,width:24 }}>集団</span>
+            <select value={charFilter.groupId} onChange={e=>setCharFilter(v=>({...v,groupId:e.target.value}))} style={{ ...IS(),flex:1,minWidth:0,padding:"7px 9px",cursor:"pointer",background:C.surface }}>
+              <option value="">すべての集団</option>
+              {data.groups.map(g=><option key={g.id} value={g.id}>{g.name||"（無名）"}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8 }}>章を選ぶと、その章のシーンに登場する人物だけが表示されます。</div>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:8 }}>
+            <span style={{ fontSize:11.5,color:C.sub }}>{charFilterActive?`${shownChars.length}名を表示中`:`全${data.characters.length}名`}</span>
+            <button onClick={clearCharFilter} disabled={!charFilterActive} style={{ padding:"6px 13px",borderRadius:9,border:`0.5px solid ${C.border}`,background:"transparent",color:charFilterActive?C.sub:C.hint,opacity:charFilterActive?1:0.4,cursor:charFilterActive?"pointer":"default",fontFamily:"inherit",fontSize:11.5 }}>解除</button>
+          </div>
+        </div>
+      )}
+
+      {!charFilterOpen&&charFilterActive&&(
+        <div style={{ display:"flex",gap:5,flexWrap:"wrap",alignItems:"center" }}>
+          {charFilter.chapterId&&<Tag label={`章：${chapterLabel(charFilter.chapterId)}`} onRemove={()=>setCharFilter(v=>({...v,chapterId:""}))}/>}
+          {charFilter.groupId&&<Tag label={`集団：${groupLabel(charFilter.groupId)}`} onRemove={()=>setCharFilter(v=>({...v,groupId:""}))}/>}
+        </div>
+      )}
     </div>
   );
 
-  const charListEl = <EntityList title="人物" icon="person" iconColor={SECTIONS.characters.color} items={sortedChars} onAdd={()=>setModal({type:"character"})} onEdit={it=>openChar(it.id)} onDelete={id=>del("characters",id)} renderName={charName} renderImage={c=>c.image||null} renderSubtitle={c=>{const g=data.genders.find(x=>x.id===c.genderId);return[g?g.name:null,ageText(data,c),c.birthday?`${dateLabel(data,c.birthday)}生`:null].filter(Boolean).join(" · ")||null;}} renderTags={c=>c.relatedGroups.slice(0,2).map(r=>{const g=data.groups.find(x=>x.id===r.groupId);return g?{label:r.position?`${g.name}（${r.position}）`:g.name}:null;}).filter(Boolean)} onMoveUp={manualOrder?(i=>moveEntity("characters",i,-1)):undefined} onMoveDown={manualOrder?(i=>moveEntity("characters",i,1)):undefined} headerExtra={layoutToggle} subHeader={charSortBar} body={charLayout==="grid"?<CharacterGrid chars={sortedChars} data={data} onOpen={c=>openChar(c.id)}/>:charLayout==="face"?<FaceGrid chars={sortedChars} onOpen={c=>openChar(c.id)}/>:undefined}/>;
+  const charFilterEmpty=(
+    <div style={{ padding:"46px 26px",textAlign:"center" }}>
+      <div style={{ fontSize:13,color:C.sub,marginBottom:6 }}>この条件に当てはまる人物がいません</div>
+      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.9,marginBottom:16 }}>章で絞った場合、その章のシーンに登場人物が紐付いていないと表示されません。</div>
+      <Btn small onClick={clearCharFilter}>絞り込みを解除</Btn>
+    </div>
+  );
+
+  const charListEl = <EntityList title="人物" icon="person" iconColor={SECTIONS.characters.color} items={shownChars} onAdd={()=>setModal({type:"character"})} onEdit={it=>openChar(it.id)} onDelete={id=>del("characters",id)} renderName={charName} renderImage={c=>c.image||null} renderSubtitle={c=>{const g=data.genders.find(x=>x.id===c.genderId);return[g?g.name:null,ageText(data,c),c.birthday?`${dateLabel(data,c.birthday)}生`:null].filter(Boolean).join(" · ")||null;}} renderTags={c=>c.relatedGroups.slice(0,2).map(r=>{const g=data.groups.find(x=>x.id===r.groupId);return g?{label:r.position?`${g.name}（${r.position}）`:g.name}:null;}).filter(Boolean)} onMoveUp={canReorder?(i=>moveEntity("characters",i,-1)):undefined} onMoveDown={canReorder?(i=>moveEntity("characters",i,1)):undefined} headerExtra={layoutToggle} subHeader={charSortBar} emptyEl={charFilterActive?charFilterEmpty:undefined} body={charLayout==="grid"?<CharacterGrid chars={shownChars} data={data} onOpen={c=>openChar(c.id)}/>:charLayout==="face"?<FaceGrid chars={shownChars} onOpen={c=>openChar(c.id)}/>:undefined}/>;
 
   const simpleList=(key,extra)=>{ const sc=SECTIONS[key]; return <EntityList title={sc.label} icon={sc.icon} iconColor={sc.color} items={data[key]} onAdd={()=>setModal({type:extra.modal})} onEdit={it=>setModal({type:extra.modal,item:it})} onDelete={extra.onDelete||(id=>del(key,id))} renderName={extra.renderName} renderSubtitle={extra.renderSubtitle} onMoveUp={i=>moveEntity(key,i,-1)} onMoveDown={i=>moveEntity(key,i,1)}/>; };
 
