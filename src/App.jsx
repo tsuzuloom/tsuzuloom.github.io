@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "B4.4";
+const APP_VERSION = "0.6.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -106,7 +106,7 @@ const norm = (d) => {
     chapters:(d.chapters||[]).map(c=>({title:"",notes:"",relatedScenes:[],...c})),
     terms:d.terms||[],
     genders:d.genders||[{id:uid(),name:"男性",color:"#5B9BD5"},{id:uid(),name:"女性",color:"#D9618A"},{id:uid(),name:"その他",color:"#888"}],
-    parameters:d.parameters||[],
+    parameters:(d.parameters||[]).map(p=>({description:"",...p,type:p.type||"text",options:(p.options||[]).filter(o=>o&&o.id)})),
     abilityParams:d.abilityParams||[],
     graphPositions:d.graphPositions||{},
     nowDate:d.nowDate||"",
@@ -345,6 +345,16 @@ const Inp = ({ label, value, onChange, type="text", placeholder, rows }) => <Fie
 const Sel = ({ label, value, onChange, options }) => <Field label={label}><select value={value} onChange={e=>onChange(e.target.value)} style={{ ...IS(),cursor:"pointer" }}><option value="">-- 未選択 --</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>;
 const Btn = ({ children, onClick, variant="default", small, icon, full, accent }) => { const ac=accent||C.accent; const vs={default:{bg:"transparent",cl:C.text,br:`0.5px solid ${C.hint}`},primary:{bg:ac+"12",cl:ac,br:`0.5px solid ${ac}`},danger:{bg:C.danger+"10",cl:C.danger,br:`0.5px solid ${C.danger}`},ghost:{bg:"transparent",cl:C.sub,br:"none"}}; const v=vs[variant]||vs.default; return <button onClick={onClick} style={{ display:"inline-flex",alignItems:"center",gap:5,padding:small?"8px 12px":"11px 16px",borderRadius:10,border:v.br,background:v.bg,color:v.cl,fontSize:small?12:13,fontWeight:500,lineHeight:1.6,minHeight:small?36:44,boxSizing:"border-box",cursor:"pointer",fontFamily:"inherit",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",whiteSpace:"nowrap" }}>{icon&&<Ico n={icon} s={small?13:15} c={v.cl}/>}{children}</button>; };
 const Divider = () => <div style={{ height:1,background:C.border,margin:"14px 0" }}/>;
+
+// 自由項目：選択式は選択肢IDで保存し、表示時に名前へ変換する（設定側で名前を変えても追随する）
+const paramOpts = p => p.options||[];
+const paramIsSelect = p => p.type==="select"||p.type==="multi";
+const paramValueIds = entry => (entry&&Array.isArray(entry.values))?entry.values:[];
+const paramDisplay = (p,entry) => {
+  if(!entry) return "";
+  if(paramIsSelect(p)) return paramValueIds(entry).map(id=>{const o=paramOpts(p).find(x=>x.id===id);return o?o.label:null;}).filter(Boolean).join("、");
+  return entry.value||"";
+};
 
 const ImageUpload = ({ value, onChange }) => {
   const ref=useRef();
@@ -668,7 +678,22 @@ const CharacterEdit = ({ char: init, data, onSave, onClose, onDelete }) => {
         {availableParams.length>0&&<AdditiveLinker available={availableParams} onAdd={id=>setAbilityVal(id,50)} getLabel={p=>p.name||"（無名）"} placeholder="能力項目を追加"/>}
       </>}
     </>}
-    {tab==="params"&&(data.parameters.length===0?<div style={{ textAlign:"center",padding:"24px 0",color:C.hint,fontSize:13 }}>設定 → 自由項目 で欄を追加してください</div>:data.parameters.map(p=>{const ex=c.parameters.find(x=>x.paramId===p.id);return <Inp key={p.id} label={p.name} value={ex?ex.value:""} onChange={v=>{const np=c.parameters.filter(x=>x.paramId!==p.id);if(v) np.push({paramId:p.id,value:v});u("parameters",np);}} placeholder={`${p.name}を入力...`}/>;}))}
+    {tab==="params"&&(data.parameters.length===0?<div style={{ textAlign:"center",padding:"24px 0",color:C.hint,fontSize:13 }}>設定 → 自由項目 で欄を追加してください</div>:data.parameters.map(p=>{
+      const ex=c.parameters.find(x=>x.paramId===p.id);
+      if(paramIsSelect(p)){
+        const sel=paramValueIds(ex).filter(id=>paramOpts(p).some(o=>o.id===id));
+        const setSel=ids=>{ const np=c.parameters.filter(x=>x.paramId!==p.id); if(ids.length) np.push({paramId:p.id,values:ids}); u("parameters",np); };
+        const toggle=id=>{ if(p.type==="multi") setSel(sel.includes(id)?sel.filter(x=>x!==id):[...sel,id]); else setSel(sel.includes(id)?[]:[id]); };
+        return (<Field key={p.id} label={p.name}>
+          {paramOpts(p).length===0
+            ? <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.7 }}>設定 → 自由項目 で「{p.name||"この項目"}」の選択肢を追加してください</div>
+            : <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>{paramOpts(p).map(o=>{ const on=sel.includes(o.id); return (
+                <button key={o.id} onClick={()=>toggle(o.id)} style={{ padding:"8px 13px",borderRadius:20,border:`1px solid ${on?C.accent:C.border}`,background:on?C.accent+"18":C.surface,color:on?C.accent:C.sub,fontSize:12.5,fontWeight:on?600:500,cursor:"pointer",fontFamily:"inherit",lineHeight:1.5 }}>{o.label}</button>); })}</div>}
+          {p.type==="multi"&&paramOpts(p).length>0&&<div style={{ fontSize:10.5,color:C.hint,marginTop:7 }}>いくつでも選べます</div>}
+        </Field>);
+      }
+      return <Inp key={p.id} label={p.name} value={ex?(ex.value||""):""} onChange={v=>{const np=c.parameters.filter(x=>x.paramId!==p.id);if(v) np.push({paramId:p.id,value:v});u("parameters",np);}} placeholder={`${p.name}を入力...`}/>;
+    }))}
     {stagePrompt&&(
       <Modal compact title={stagePrompt.mode==="add"?"時期を追加":"時期の名前を変更"} onClose={()=>setStagePrompt(null)} footer={<><Btn onClick={()=>setStagePrompt(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="primary" onClick={commitStage}>{stagePrompt.mode==="add"?"追加":"変更"}</Btn></>}>
         <Inp label="時期の名前" value={stagePrompt.value} onChange={v=>setStagePrompt(prev=>({...prev,value:v}))} placeholder="例：初期、中盤、完結後"/>
@@ -743,6 +768,50 @@ const AbilityParamEdit = ({ param: init, onSave, onClose, onDelete }) => {
   </Modal>);
 };
 
+const ParameterEdit = ({ param: init, onSave, onClose, onDelete }) => {
+  const [p,setP]=useState(()=>({id:uid(),name:"",description:"",type:"text",options:[],...(init||{})}));
+  const u=(k,v)=>setP(prev=>({...prev,[k]:v}));
+  const opts=p.options||[];
+  const setOpt=(id,label)=>u("options",opts.map(o=>o.id===id?{...o,label}:o));
+  const addOpt=()=>u("options",[...opts,{id:uid(),label:""}]);
+  const delOpt=id=>u("options",opts.filter(o=>o.id!==id));
+  const moveOpt=(i,d)=>{ const n=[...opts]; const t=i+d; if(t<0||t>=n.length) return; [n[i],n[t]]=[n[t],n[i]]; u("options",n); };
+  const TYPES=[{v:"text",label:"自由入力",desc:"文章や数字を自由に書けます"},{v:"select",label:"選択式（1つ）",desc:"用意した選択肢から1つ選びます"},{v:"multi",label:"選択式（複数）",desc:"選択肢をいくつでも選べます"}];
+  const save=()=>onSave({...p,options:opts.filter(o=>(o.label||"").trim()).map(o=>({...o,label:o.label.trim()}))});
+  return (<Modal title={p.name||"新しい自由項目"} onClose={onClose} footer={<>{init?<Btn variant="danger" icon="trash" small onClick={onDelete}>削除</Btn>:null}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={save}>保存</Btn></>}>
+    <Inp label="項目名" value={p.name} onChange={v=>u("name",v)} placeholder="例：属性、種族、好きな食べ物..."/>
+    <Field label="入力形式">
+      <div style={{ display:"flex",flexDirection:"column",gap:7 }}>
+        {TYPES.map(t=>{ const on=(p.type||"text")===t.v; return (
+          <div key={t.v} onClick={()=>u("type",t.v)} style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"11px 13px",borderRadius:11,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.surface,cursor:"pointer" }}>
+            <div style={{ width:19,height:19,borderRadius:10,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1 }}>{on?<Ico n="check" s={12} c={C.accentFg}/>:null}</div>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:13.5,fontWeight:600,color:C.text,marginBottom:2 }}>{t.label}</div>
+              <div style={{ fontSize:11,color:C.sub,lineHeight:1.6 }}>{t.desc}</div>
+            </div>
+          </div>); })}
+      </div>
+    </Field>
+    {paramIsSelect(p)&&(
+      <Field label="選択肢">
+        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:9 }}>
+          {opts.length===0&&<div style={{ fontSize:11.5,color:C.hint,padding:"8px 0 2px",lineHeight:1.7 }}>選択肢がまだありません。下のボタンで追加してください。</div>}
+          {opts.map((o,i)=>(
+            <div key={o.id} style={{ display:"flex",gap:5,alignItems:"center" }}>
+              <input value={o.label} onChange={e=>setOpt(o.id,e.target.value)} placeholder={`選択肢 ${i+1}`} style={{ ...IS(),flex:1,minWidth:0,padding:"8px 10px" }}/>
+              <button onClick={()=>moveOpt(i,-1)} disabled={i===0} style={{ flexShrink:0,width:32,minHeight:38,borderRadius:9,border:`0.5px solid ${C.border}`,background:"transparent",opacity:i===0?0.25:1,cursor:i===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="chevU" s={13} c={C.sub}/></button>
+              <button onClick={()=>moveOpt(i,1)} disabled={i===opts.length-1} style={{ flexShrink:0,width:32,minHeight:38,borderRadius:9,border:`0.5px solid ${C.border}`,background:"transparent",opacity:i===opts.length-1?0.25:1,cursor:i===opts.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="chevD" s={13} c={C.sub}/></button>
+              <button onClick={()=>delOpt(o.id)} style={{ flexShrink:0,width:32,minHeight:38,borderRadius:9,border:`0.5px solid ${C.border}`,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="x" s={13} c={C.danger}/></button>
+            </div>))}
+        </div>
+        <Btn small icon="plus" full onClick={addOpt}>選択肢を追加</Btn>
+        <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8,marginTop:9 }}>選択肢の名前はあとから変えられます。変更すると、すでに設定済みの人物にも反映されます。</div>
+      </Field>
+    )}
+    <Inp label="説明（任意）" value={p.description||""} onChange={v=>u("description",v)} rows={2} placeholder="この項目が何を表すかのメモ..."/>
+  </Modal>);
+};
+
 // ===================== CHARACTER VIEW（閲覧ビュー）=====================
 const VSection = ({ title, count, accent, children, action }) => (
   <div style={{ marginBottom:12,background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
@@ -774,7 +843,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
   const age = ageInfo?ageInfo.age:null;
   const groups = char.relatedGroups.map(r=>({ ...r, g:data.groups.find(x=>x.id===r.groupId) })).filter(x=>x.g);
   const terms = char.relatedTerms.map(id=>data.terms.find(t=>t.id===id)).filter(Boolean);
-  const params = data.parameters.map(p=>({ p, v:(char.parameters.find(x=>x.paramId===p.id)||{}).value })).filter(x=>x.v);
+  const params = data.parameters.map(p=>({ p, v:paramDisplay(p,char.parameters.find(x=>x.paramId===p.id)) })).filter(x=>x.v);
   const rels = char.relatedCharacters.map(r=>({ ...r, other:data.characters.find(c=>c.id===r.charId) })).filter(x=>x.other);
   const scenes = data.scenes.filter(s=>(s.relatedCharacters||[]).includes(char.id));
   const furi = charFuri(char);
@@ -1262,7 +1331,7 @@ const SearchScreen = ({ data, onClose, onOpenItem }) => {
   const results=[];
   if(query){
     const hit=(v)=>v&&String(v).includes(query);
-    data.characters.forEach(c=>{ const fields=[["名前",charName(c)],["ふりがな",charFuri(c)],["備考",c.notes]]; const f=fields.find(([_,v])=>hit(v)); const pf=c.parameters.find(p=>hit(p.value)); if(f||pf){ const label=f?f[0]:(data.parameters.find(x=>x.id===pf.paramId)||{}).name||"パラメータ"; const text=f?f[1]:pf.value; results.push({type:"character",kind:"人物",icon:"person",color:"#E8916E",id:c.id,title:charName(c),label,snippet:snip(String(text),query),item:c}); } });
+    data.characters.forEach(c=>{ const fields=[["名前",charName(c)],["ふりがな",charFuri(c)],["備考",c.notes]]; const f=fields.find(([_,v])=>hit(v)); const pf=c.parameters.map(e=>{const def=data.parameters.find(x=>x.id===e.paramId);return def?{def,text:paramDisplay(def,e)}:null;}).find(x=>x&&hit(x.text)); if(f||pf){ const label=f?f[0]:(pf.def.name||"自由項目"); const text=f?f[1]:pf.text; results.push({type:"character",kind:"人物",icon:"person",color:"#E8916E",id:c.id,title:charName(c),label,snippet:snip(String(text),query),item:c}); } });
     data.groups.forEach(g=>{ const f=[["集団名",g.name],["説明",g.description],["備考",g.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"group",kind:"集団",icon:"group",color:"#D9618A",id:g.id,title:g.name||"（無名）",label:f[0],snippet:snip(String(f[1]),query),item:g}); });
     data.locations.forEach(l=>{ const f=[["場所名",l.name],["説明",l.description],["備考",l.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"location",kind:"場所",icon:"pin",color:"#4CAF82",id:l.id,title:l.name||"（無名）",label:f[0],snippet:snip(String(f[1]),query),item:l}); });
     data.scenes.forEach(s=>{ const f=[["タイトル",s.title],["脚本",s.script],["備考",s.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"scene",kind:"シーン",icon:"scene",color:"#5B9BD5",id:s.id,title:s.title||"（無題）",label:f[0],snippet:snip(String(f[1]),query),item:s}); });
@@ -1662,7 +1731,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const [charLayout,setCharLayout]=useState(localStorage.getItem("tl_charLayout")||"list");
   const [charSort,setCharSort]=useState({key:"manual",asc:true});
   const [charFilterOpen,setCharFilterOpen]=useState(false);
-  const [charFilter,setCharFilter]=useState({chapterId:"",groupId:""});
+  const [charFilter,setCharFilter]=useState({chapterId:"",groupId:"",params:{}});
   const isDesktop=useIsDesktop();
 
   // URLの画面キーを、スマホのタブ／PCのサイドバー選択に翻訳する
@@ -1693,7 +1762,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const exportMarkdown=useCallback(()=>{
     let md=`# ${data.storyTitle||"ストーリー"}\n\n`;
     if(data.storySynopsis) md+=`## あらすじ\n\n${data.storySynopsis}\n\n`;
-    if(data.characters.length){ md+=`---\n\n## 登場人物\n\n`; data.characters.forEach(c=>{ md+=`### ${charName(c)}\n\n`; const lines=[]; const g=data.genders.find(x=>x.id===c.genderId); if(g) lines.push(`**性別:** ${g.name}`); if(c.birthday) lines.push(`**誕生日:** ${c.birthday}`); if(c.deathDate) lines.push(`**死亡日:** ${c.deathDate}`); const grps=c.relatedGroups.map(r=>{const grp=data.groups.find(x=>x.id===r.groupId);return grp?(r.position?`${grp.name}（${r.position}）`:grp.name):null;}).filter(Boolean); if(grps.length) lines.push(`**所属:** ${grps.join("、")}`); const rels=c.relatedCharacters.map(r=>{const ch=data.characters.find(x=>x.id===r.charId);if(!ch) return null;let s=charName(ch);const sub=[r.callName&&`${r.callName}と呼ぶ`,r.calledName&&`${r.calledName}と呼ばれる`].filter(Boolean);if(sub.length) s+=`（${sub.join("・")}）`;return s;}).filter(Boolean); if(rels.length) lines.push(`**関連人物:** ${rels.join("、")}`); data.parameters.forEach(p=>{const pv=c.parameters.find(x=>x.paramId===p.id);if(pv&&pv.value) lines.push(`**${p.name}:** ${pv.value}`);}); const ab=c.abilities.map(a=>{const ap=data.abilityParams.find(x=>x.id===a.paramId);return ap?`${ap.name}: ${a.value}`:null;}).filter(Boolean); if(ab.length) lines.push(`**能力値:** ${ab.join(" / ")}`); if(lines.length) md+=lines.join("  \n")+"\n\n"; if(c.notes) md+=`${c.notes}\n\n`; }); }
+    if(data.characters.length){ md+=`---\n\n## 登場人物\n\n`; data.characters.forEach(c=>{ md+=`### ${charName(c)}\n\n`; const lines=[]; const g=data.genders.find(x=>x.id===c.genderId); if(g) lines.push(`**性別:** ${g.name}`); if(c.birthday) lines.push(`**誕生日:** ${c.birthday}`); if(c.deathDate) lines.push(`**死亡日:** ${c.deathDate}`); const grps=c.relatedGroups.map(r=>{const grp=data.groups.find(x=>x.id===r.groupId);return grp?(r.position?`${grp.name}（${r.position}）`:grp.name):null;}).filter(Boolean); if(grps.length) lines.push(`**所属:** ${grps.join("、")}`); const rels=c.relatedCharacters.map(r=>{const ch=data.characters.find(x=>x.id===r.charId);if(!ch) return null;let s=charName(ch);const sub=[r.callName&&`${r.callName}と呼ぶ`,r.calledName&&`${r.calledName}と呼ばれる`].filter(Boolean);if(sub.length) s+=`（${sub.join("・")}）`;return s;}).filter(Boolean); if(rels.length) lines.push(`**関連人物:** ${rels.join("、")}`); data.parameters.forEach(p=>{const pv=paramDisplay(p,c.parameters.find(x=>x.paramId===p.id));if(pv) lines.push(`**${p.name}:** ${pv}`);}); const ab=c.abilities.map(a=>{const ap=data.abilityParams.find(x=>x.id===a.paramId);return ap?`${ap.name}: ${a.value}`:null;}).filter(Boolean); if(ab.length) lines.push(`**能力値:** ${ab.join(" / ")}`); if(lines.length) md+=lines.join("  \n")+"\n\n"; if(c.notes) md+=`${c.notes}\n\n`; }); }
     if(data.groups.length){ md+=`---\n\n## 集団\n\n`; data.groups.forEach(g=>{ md+=`### ${g.name||"（無名）"}\n\n`; if(g.description) md+=`${g.description}\n\n`; const m=g.relatedCharacters.map(id=>{const ch=data.characters.find(c=>c.id===id);return ch?charName(ch):null;}).filter(Boolean); if(m.length) md+=`**メンバー:** ${m.join("、")}\n\n`; if(g.notes) md+=`${g.notes}\n\n`; }); }
     if(data.locations.length){ md+=`---\n\n## 場所\n\n`; data.locations.forEach(l=>{ md+=`### ${l.name||"（無名）"}\n\n`; if(l.description) md+=`${l.description}\n\n`; if(l.notes) md+=`${l.notes}\n\n`; }); }
     if(data.terms.length){ md+=`---\n\n## 用語集\n\n`; data.terms.forEach(t=>{ md+=`### ${t.name||"（無名）"}\n\n`; if(t.description) md+=`${t.description}\n\n`; }); }
@@ -1820,7 +1889,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     const val=(c)=>{
       if(charSort.key==="name") return charFuri(c)||charName(c);
       if(charSort.key==="birth") return dayIndex(data,c.birthday);
-      if(charSort.key.startsWith("p:")){ const e=c.parameters.find(x=>x.paramId===charSort.key.slice(2)); return e?e.value:""; }
+      if(charSort.key.startsWith("p:")){ const pid=charSort.key.slice(2); const def=data.parameters.find(x=>x.id===pid); const e=c.parameters.find(x=>x.paramId===pid); return def?paramDisplay(def,e):""; }
       return "";
     };
     cs.sort((a,b)=>{
@@ -1848,12 +1917,17 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   };
   const filterByChapter = charFilter.chapterId ? charIdsInChapter(charFilter.chapterId) : null;
   const filterByGroup = (()=>{ if(!charFilter.groupId) return null; const g=data.groups.find(x=>x.id===charFilter.groupId); return new Set(g?(g.relatedCharacters||[]):[]); })();
-  const charFilterActive = !!(filterByChapter||filterByGroup);
-  const shownChars = sortedChars.filter(c=>(!filterByChapter||filterByChapter.has(c.id))&&(!filterByGroup||filterByGroup.has(c.id)));
+  const selectParams = data.parameters.filter(p=>paramIsSelect(p)&&paramOpts(p).length>0);
+  const paramFilters = Object.entries(charFilter.params||{}).filter(([pid,oid])=>oid&&selectParams.some(p=>p.id===pid));
+  const charFilterActive = !!(filterByChapter||filterByGroup||paramFilters.length);
+  const matchParams = c => paramFilters.every(([pid,oid])=>paramValueIds(c.parameters.find(x=>x.paramId===pid)).includes(oid));
+  const shownChars = sortedChars.filter(c=>(!filterByChapter||filterByChapter.has(c.id))&&(!filterByGroup||filterByGroup.has(c.id))&&matchParams(c));
   const canReorder = manualOrder && !charFilterActive;
   const chapterLabel=(id)=>{ const c=data.chapters.find(x=>x.id===id); return c?(c.title||"（無題）"):""; };
   const groupLabel=(id)=>{ const g=data.groups.find(x=>x.id===id); return g?(g.name||"（無名）"):""; };
-  const clearCharFilter=()=>setCharFilter({chapterId:"",groupId:""});
+  const optionLabel=(pid,oid)=>{ const p=data.parameters.find(x=>x.id===pid); const o=p?paramOpts(p).find(x=>x.id===oid):null; return o?o.label:""; };
+  const setParamFilter=(pid,oid)=>setCharFilter(v=>({...v,params:{...(v.params||{}),[pid]:oid}}));
+  const clearCharFilter=()=>setCharFilter({chapterId:"",groupId:"",params:{}});
 
   const charSortBar=(
     <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -1887,6 +1961,14 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
               {data.groups.map(g=><option key={g.id} value={g.id}>{g.name||"（無名）"}</option>)}
             </select>
           </div>
+          {selectParams.map(p=>(
+            <div key={p.id} style={{ display:"flex",gap:7,alignItems:"center" }}>
+              <span style={{ fontSize:10.5,color:C.hint,flexShrink:0,width:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.name}</span>
+              <select value={(charFilter.params||{})[p.id]||""} onChange={e=>setParamFilter(p.id,e.target.value)} style={{ ...IS(),flex:1,minWidth:0,padding:"7px 9px",cursor:"pointer",background:C.surface }}>
+                <option value="">すべて</option>
+                {paramOpts(p).map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </div>))}
           <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8 }}>章を選ぶと、その章のシーンに登場する人物だけが表示されます。</div>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:8 }}>
             <span style={{ fontSize:11.5,color:C.sub }}>{charFilterActive?`${shownChars.length}名を表示中`:`全${data.characters.length}名`}</span>
@@ -1899,6 +1981,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
         <div style={{ display:"flex",gap:5,flexWrap:"wrap",alignItems:"center" }}>
           {charFilter.chapterId&&<Tag label={`章：${chapterLabel(charFilter.chapterId)}`} onRemove={()=>setCharFilter(v=>({...v,chapterId:""}))}/>}
           {charFilter.groupId&&<Tag label={`集団：${groupLabel(charFilter.groupId)}`} onRemove={()=>setCharFilter(v=>({...v,groupId:""}))}/>}
+          {paramFilters.map(([pid,oid])=>{ const p=data.parameters.find(x=>x.id===pid); return <Tag key={pid} label={`${p?p.name:""}：${optionLabel(pid,oid)}`} onRemove={()=>setParamFilter(pid,"")}/>; })}
         </div>
       )}
     </div>
@@ -1928,7 +2011,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "locations": return simpleList("locations",{modal:"location",renderName:l=>l.name||"（無名）",renderSubtitle:l=>l.description?l.description.slice(0,36):null});
       case "terms": return simpleList("terms",{modal:"term",renderName:t=>t.name||"（無名）",renderSubtitle:t=>t.description?t.description.slice(0,36):null});
       case "genders": return simpleList("genders",{modal:"gender",renderName:g=>g.name||"（無名）",renderSubtitle:g=>g.color});
-      case "parameters": return simpleList("parameters",{modal:"parameter",renderName:p=>p.name||"（無名）",renderSubtitle:p=>p.description?p.description.slice(0,36):"人物ページに欄が増えます"});
+      case "parameters": return simpleList("parameters",{modal:"parameter",renderName:p=>p.name||"（無名）",renderSubtitle:p=>{ const t=p.type==="select"?`選択式・${paramOpts(p).length}個の選択肢`:p.type==="multi"?`選択式（複数）・${paramOpts(p).length}個の選択肢`:"自由入力"; return p.description?`${t} · ${p.description.slice(0,24)}`:t; }});
       case "abilityParams": return simpleList("abilityParams",{modal:"abilityParam",renderName:p=>p.name||"（無名）",renderSubtitle:()=>"能力値チャートの軸",onDelete:id=>{const p=data.abilityParams.find(x=>x.id===id);setConfirmBox({title:"能力の軸を削除",body:`「${p?p.name:""}」を削除します。全人物のこの項目の値も消えます。`,run:()=>del("abilityParams",id)});}});
       case "relationTypes": return simpleList("relationTypes",{modal:"relationType",renderName:t=>t.name||"（無名）",renderSubtitle:()=>"つながりの線につく名前と色",onDelete:id=>{const t=data.relationTypes.find(x=>x.id===id);setConfirmBox({title:"関係の種類を削除",body:`「${t?t.name:""}」を削除します。`,run:()=>del("relationTypes",id)});}});
       case "calendar": return <CalendarSettings data={data} upd={upd}/>;
@@ -1964,7 +2047,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     if(type==="location") return <SimpleEdit item={item} entityName="場所" data={data} onSave={l=>{upsert("locations",l);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"場所名",type:"text",placeholder:"例：王都カルナ"},{key:"description",label:"説明",type:"textarea",placeholder:"説明..."},{key:"notes",label:"備考",type:"textarea",placeholder:"メモ..."}]}/>;
     if(type==="term") return <SimpleEdit item={item} entityName="用語" data={data} onSave={t=>{upsert("terms",t);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"用語名",type:"text",placeholder:"例：魔導石"},{key:"description",label:"説明",type:"textarea",placeholder:"説明..."},{key:"relatedCharacters",label:"関連人物",type:"links",dataKey:"characters",getLabel:charName,getColor:c=>c.imageColor},{key:"notes",label:"備考",type:"textarea",placeholder:"メモ..."}]}/>;
     if(type==="gender") return <SimpleEdit item={item} entityName="性別" data={data} onSave={g=>{upsert("genders",g);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"性別名",type:"text",placeholder:"例：男性 / 女性..."},{key:"color",label:"カラー",type:"color"}]}/>;
-    if(type==="parameter") return <SimpleEdit item={item} entityName="自由項目" data={data} onSave={p=>{upsert("parameters",p);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"項目名",type:"text",placeholder:"例：好きな食べ物、口癖..."},{key:"description",label:"説明（任意）",type:"textarea",placeholder:"説明..."}]}/>;
+    if(type==="parameter") return <ParameterEdit param={item} onSave={p=>{upsert("parameters",p);setModal(null);}} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="abilityParam") return <AbilityParamEdit param={item} onSave={p=>{ upsert("abilityParams",p); if(p.applyAll) applyAbilityToAllSilent(p.id); setModal(null); }} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="relationType") return <SimpleEdit item={item} entityName="関係の種類" data={data} onSave={t=>{upsert("relationTypes",t);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"関係の名前",type:"text",placeholder:"例：親子、師弟、宿敵..."},{key:"color",label:"線の色",type:"color"}]}/>;
     return null;
@@ -2248,7 +2331,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         </Field>
         <div style={{ textAlign:"center",marginTop:28,opacity:0.55 }}>
           <div style={{ fontSize:12,fontWeight:600,color:C.sub,letterSpacing:"-0.2px" }}>Tsuzu Loom</div>
-          <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}</div>
+          <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}（ベータ）</div>
         </div>
         </div>
       </div>
