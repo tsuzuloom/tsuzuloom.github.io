@@ -94,7 +94,7 @@ const dateLabel = (data,str,opt) => { if(!str) return ""; const cal=data.calenda
 const norm = (d) => {
   if (!d) d = {};
   const mkChar = c => ({ image:"",imageColor:"#8EA3C3",genderId:"",birthday:"",deathDate:"",notes:"",lastName:"",firstName:"",middleName:"",lastNameFuri:"",firstNameFuri:"",middleNameFuri:"",nameOrder:"last_first",relatedCharacters:[],relatedGroups:[],relatedTerms:[],parameters:[],abilities:[],abilityStages:null, ...c,
-    relatedCharacters:(c.relatedCharacters||[]).map(r=>r&&typeof r==="object"&&r.charId?{charId:r.charId,callName:r.callName||"",calledName:r.calledName||"",relTypeId:r.relTypeId||"",direction:r.direction||"both"}:{charId:r&&r.charId?r.charId:r,callName:(r&&r.callName)||"",calledName:(r&&r.calledName)||"",relTypeId:"",direction:"both"}),
+    relatedCharacters:(c.relatedCharacters||[]).map(r=>r&&typeof r==="object"&&r.charId?{charId:r.charId,callName:r.callName||"",calledName:r.calledName||"",relTypeId:r.relTypeId||"",direction:r.direction||"both",text:r.text||"",arrowOut:r.arrowOut,lineStyle:r.lineStyle||"solid"}:{charId:r&&r.charId?r.charId:r,callName:(r&&r.callName)||"",calledName:(r&&r.calledName)||"",relTypeId:"",direction:"both"}),
     relatedGroups:(c.relatedGroups||[]).map(r=>r&&typeof r==="object"&&r.groupId?r:{groupId:r&&r.groupId?r.groupId:r,position:(r&&r.position)||""}),
   });
   const migChar = c => { const ch=mkChar(c); if(!ch.abilityStages||!Array.isArray(ch.abilityStages)||ch.abilityStages.length===0){ ch.abilityStages=[{id:uid(),name:"現在",abilities:ch.abilities||[]}]; } return ch; };
