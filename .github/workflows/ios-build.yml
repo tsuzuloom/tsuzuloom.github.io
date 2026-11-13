@@ -1,7 +1,9 @@
 name: Build iOS IPA
 
-# 手動実行のみ（Actionsタブ →「Build iOS IPA」→「Run workflow」）
+# ios-buildブランチへのpush時、または手動実行（Actionsタブ →「Build iOS IPA」→「Run workflow」）
 on:
+  push:
+    branches: [ios-build]
   workflow_dispatch:
 
 jobs:
