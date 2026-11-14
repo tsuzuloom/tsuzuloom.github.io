@@ -91,7 +91,7 @@ const localClearUser = async (uid) => {
 };
 
 // ===== iPhoneの「ファイル」アプリへの保存（このiPhone内 › Tsuzu Loom） =====
-const filesEnabled = () => { try { return Capacitor.isNativePlatform() && localStorage.getItem("tl_files")!=="0"; } catch(e){ return false; } };
+const filesEnabled = () => { try { return Capacitor.isNativePlatform() && localStorage.getItem("tl_files")==="1"; } catch(e){ return false; } };
 const fileTimers = {};
 const writeStoryFile = (uid, id, data, allTitles) => {
   if(!filesEnabled() || !data) return;
@@ -2641,7 +2641,7 @@ const Toggle = ({ on }) => (
 function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
-  const [filesOn,setFilesOn]=useState(()=>{ try { return localStorage.getItem("tl_files")!=="0"; } catch(e){ return true; } });
+  const [filesOn,setFilesOn]=useState(()=>{ try { return localStorage.getItem("tl_files")==="1"; } catch(e){ return false; } });
   const [filesMsg,setFilesMsg]=useState("");
   const toggleFiles=()=>{ const v=!filesOn; setFilesOn(v); try { localStorage.setItem("tl_files",v?"1":"0"); } catch(e){} if(v) saveAllToFiles(); };
   const saveAllToFiles=async()=>{
