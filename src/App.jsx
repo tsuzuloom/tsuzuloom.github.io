@@ -2565,7 +2565,7 @@ const DOCS_URL = SITE_URL + "docs/";
 const CONTACT_EMAIL = "tsuzuloom.app@gmail.com";
 const DISCORD_URL = "https://discord.gg/gmTCxMj3G";
 // 支援ページ。App Store の決まりで、iPhoneアプリには出さない（Web版だけ）
-const SUPPORT_URL = ""; // OFUSE
+const SUPPORT_URL = "https://ofuse.me/082586cd"; // OFUSE
 const isNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } };
 const openExternal = (url) => { if(url.startsWith("mailto:")) { window.location.href = url; return; } window.open(url, "_blank", "noopener"); };
 
