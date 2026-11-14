@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.13.0";
+const APP_VERSION = "0.14.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -2056,12 +2056,13 @@ const buildSample = () => {
   const c1=id("c1"), c2=id("c2"), c3=id("c3");
   const grp1=id("grp1"), loc1=id("loc1"), loc2=id("loc2"), term1=id("term1");
   const ch1=id("ch1"), sc1=id("sc1"), sc2=id("sc2"), sc3=id("sc3");
-  const pHeight=id("pHeight"), pFood=id("pFood");
+  const pHeight=id("pHeight"), pFood=id("pFood"), pBio=id("pBio"), pPers=id("pPers");
+  const c4=id("c4"), c5=id("c5"), ev1=id("ev1"), ev2=id("ev2");
   const ab1=id("ab1"), ab2=id("ab2"), ab3=id("ab3");
   const stage=(name,v)=>({id:uid(),name,abilities:[{paramId:ab1,value:v[0]},{paramId:ab2,value:v[1]},{paramId:ab3,value:v[2]}]});
   return norm({
     storyTitle:"見本：夜明けの断片",
-    storySynopsis:"これは使い方を見てもらうための見本です。自由に書き換えても、まるごと削除してもかまいません。\n独自の暦・元号・相関図・能力値が、ひと通り入った状態にしてあります。",
+    storySynopsis:"これは使い方を見てもらうための見本です。自由に書き換えても、まるごと削除してもかまいません。\n独自の暦・元号・相関図・家系図・年表・能力値が、ひと通り入った状態にしてあります。",
     calendar:{
       enabled:true, yearLabel:"帝暦", display:"both",
       months:[{name:"霜の月",days:30},{name:"芽の月",days:40},{name:"灯の月",days:30}],
@@ -2069,7 +2070,8 @@ const buildSample = () => {
     },
     genders:[{id:gM,name:"男性",color:"#5B9BD5"},{id:gF,name:"女性",color:"#D9618A"},{id:gO,name:"その他",color:"#888888"}],
     relationTypes:[{id:rTwin,name:"双子",color:"#8A6D3B"},{id:rMaster,name:"師",color:"#4CAF82"},{id:rLove,name:"想い",color:"#D9618A"},{id:rHate,name:"わだかまり",color:"#C0392B"}],
-    parameters:[{id:pHeight,name:"身長",description:"数字で入れると身長順に並べ替えられます"},{id:pFood,name:"好きなもの",description:""}],
+    parameters:[{id:pHeight,name:"身長",description:"数字で入れると身長順に並べ替えられます"},{id:pFood,name:"好きなもの",description:""},
+      {id:pBio,name:"生い立ち",type:"long",description:"生まれた場所、育った環境、これまでの歩み"},{id:pPers,name:"性格",type:"long",description:"長所・短所、癖、ふるまい"}],
     abilityParams:[{id:ab1,name:"曜力",applyAll:true},{id:ab2,name:"剣",applyAll:true},{id:ab3,name:"知",applyAll:true}],
     characters:[
       { id:c1, lastName:"水無瀬", firstName:"縁", lastNameFuri:"みなせ", firstNameFuri:"ゆかり", nameOrder:"last_first",
@@ -2080,7 +2082,9 @@ const buildSample = () => {
           {charId:c3,relTypeId:rMaster,callName:"灯様",calledName:"縁ちゃん",arrowOut:true,lineStyle:"solid",direction:"both",text:"頭が上がらない"},
         ],
         relatedGroups:[{groupId:grp1,position:"花師"}], relatedTerms:[term1],
-        parameters:[{paramId:pHeight,value:"156cm"},{paramId:pFood,value:"彼岸花"}],
+        parameters:[{paramId:pHeight,value:"156cm"},{paramId:pFood,value:"彼岸花"},
+          {paramId:pBio,value:"白霧の辺境村に、双子の妹として生まれる。六歳の冬に村の大火で父を亡くし、兄の澪とは別々の家に引き取られた。\n花師だった祖母のもとで、曜力の扱いを学んで育つ。"},
+          {paramId:pPers,value:"物静かで、人の話を最後まで聞く。\n一度決めたことは曲げない頑固さがあり、兄にだけは甘えが出る。"}],
         abilityStages:[stage("序盤",[45,20,60]),stage("帝都にて",[75,30,80])] },
       { id:c2, lastName:"柊", firstName:"澪", lastNameFuri:"ひいらぎ", firstNameFuri:"みお", nameOrder:"last_first",
         genderId:gM, imageColor:"#3B5BA8", birthday:"512-01-03", deathDate:"",
@@ -2102,6 +2106,22 @@ const buildSample = () => {
         relatedGroups:[], relatedTerms:[term1],
         parameters:[{paramId:pHeight,value:"168cm"},{paramId:pFood,value:"薬草茶"}],
         abilityStages:[stage("帝都にて",[90,10,95])] },
+      { id:c4, lastName:"水無瀬", firstName:"透", lastNameFuri:"みなせ", firstNameFuri:"とおる", nameOrder:"last_first",
+        genderId:gM, imageColor:"#7B8DA6", birthday:"486-03-10", deathDate:"518-02-01",
+        notes:"双子の父。村の大火で亡くなった。", relatedCharacters:[], relatedGroups:[{groupId:grp1,position:""}], relatedTerms:[], parameters:[], abilityStages:[] },
+      { id:c5, lastName:"柊", firstName:"雪", lastNameFuri:"ひいらぎ", firstNameFuri:"ゆき", nameOrder:"last_first",
+        genderId:gF, imageColor:"#B8A2D9", birthday:"490-01-20", deathDate:"",
+        notes:"双子の母。大火のあと、澪だけを連れて村を出た。", relatedCharacters:[], relatedGroups:[], relatedTerms:[], parameters:[], abilityStages:[] },
+    ],
+    family:[
+      {id:id("f1"),type:"spouse",a:c4,b:c5},
+      {id:id("f2"),type:"parent",a:c4,b:c2},{id:id("f3"),type:"parent",a:c5,b:c2},
+      {id:id("f4"),type:"parent",a:c4,b:c1},{id:id("f5"),type:"parent",a:c5,b:c1},
+    ],
+    familySort:{[c2]:0,[c1]:1},
+    events:[
+      {id:ev1,title:"動乱期のはじまり",startDate:"512-01-01",endDate:"",color:"#7B8DA6",notes:"元号が「動乱期」に改められる。双子が生まれる二日前のこと。",relatedCharacters:[]},
+      {id:ev2,title:"白霧の村の大火",startDate:"518-02-01",endDate:"",color:"#C0392B",notes:"父・透が亡くなった夜。双子は別々の家に引き取られる。",relatedCharacters:[c1,c2,c4,c5]},
     ],
     groups:[{ id:grp1, name:"白霧の民", description:"辺境の村で伝承を守ってきた一族。", notes:"",
       relatedCharacters:[c1,c2], memberNotes:{[c1]:"花師",[c2]:"護衛"} }],
@@ -2651,6 +2671,77 @@ function ImportStoryButton({ onImport }) {
       <Btn icon="download" onClick={()=>ref.current&&ref.current.click()} title="ファイルから読み込む">読み込む</Btn>
       {err&&(<Modal compact title="読み込めませんでした" onClose={()=>setErr("")} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setErr("")}>OK</Btn></>}><div style={{ fontSize:13,color:C.text,lineHeight:1.9 }}>{err}</div></Modal>)}
     </>
+  );
+}
+
+// ===================== はじめての案内 =====================
+const INTRO_KEY = "tl_intro_v1";
+const IntroArt = ({ kind }) => {
+  const box={ width:220,height:132,margin:"0 auto",position:"relative" };
+  const av=(x,y,col,t,s=34)=>(<div style={{ position:"absolute",left:x,top:y,width:s,height:s,borderRadius:"50%",background:col,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s*0.42,fontWeight:600,boxShadow:`0 0 0 3px ${C.surface}` }}>{t}</div>);
+  if(kind==="welcome") return (<div style={{ ...box,display:"flex",alignItems:"center",justifyContent:"center" }}><img src="./icon-512.png" alt="" style={{ width:108,height:108,borderRadius:26,boxShadow:"0 8px 26px rgba(0,0,0,0.18)" }}/></div>);
+  if(kind==="people") return (<div style={box}>
+    <svg width="220" height="132" style={{ position:"absolute",inset:0 }}>
+      <path d="M57 40 L163 40" stroke={C.accent} strokeWidth="1.6" strokeDasharray="0" fill="none"/>
+      <path d="M57 43 L163 43" stroke={C.accent} strokeWidth="1.6" fill="none"/>
+      <path d="M110 42 V82 M60 82 H160 M60 82 V98 M160 82 V98" stroke={C.sub} strokeWidth="1.4" fill="none"/>
+    </svg>
+    {av(23,24,"#7B8DA6","透")}{av(163,24,"#B8A2D9","雪")}{av(43,98,"#3B5BA8","澪")}{av(143,98,"#8A6D3B","縁")}
+  </div>);
+  if(kind==="time") return (<div style={{ ...box,display:"flex",flexDirection:"column",gap:7,justifyContent:"center",width:230 }}>
+    {[["512年","動乱期のはじまり","#7B8DA6",true],["518年","白霧の村の大火","#C0392B",true],["531年","旅立ちの朝　縁 19歳",C.accent,false]].map(([y,t,col,ev])=>(
+      <div key={y} style={{ display:"flex",alignItems:"center",gap:9 }}>
+        <span style={{ fontSize:10.5,color:C.hint,width:38,textAlign:"right",flexShrink:0 }}>{y}</span>
+        {ev?<div style={{ width:8,height:8,transform:"rotate(45deg)",background:col,borderRadius:2,flexShrink:0 }}/>:<div style={{ width:8,height:8,borderRadius:"50%",background:col,flexShrink:0 }}/>}
+        <div style={{ flex:1,background:C.surface,border:`0.5px solid ${C.border}`,borderLeft:`3px solid ${col}`,borderRadius:8,padding:"6px 9px",fontSize:11.5,color:C.text,textAlign:"left",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{t}</div>
+      </div>
+    ))}
+  </div>);
+  if(kind==="safe") return (<div style={{ ...box,display:"flex",alignItems:"center",justifyContent:"center" }}>
+    <div style={{ width:92,height:92,borderRadius:28,background:C.accent+"18",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="shield" s={46} c={C.accent} sw={1.3}/></div>
+  </div>);
+  return null;
+};
+const INTRO_PAGES = [
+  { art:"welcome", title:"Tsuzu Loom へようこそ", body:"増えていくキャラと設定を、作品ごとにひとつの部屋にまとめる創作アプリです。\n思いついたところから、少しずつ書き足していけます。" },
+  { art:"people", title:"人物とつながり", body:"人物ごとに、プロフィール・誕生日・能力値などをまとめられます。\n相関図と家系図は、登録したつながりから自動で描かれます。" },
+  { art:"time", title:"年表と、独自の暦", body:"シーンや出来事を時間の順に並べて、その時の年齢まで自動で表示します。\n作品だけの暦や元号を作ることもできます。" },
+  { art:"safe", title:"安心して書けるように", list:["書いた内容は自動で保存。電波がなくても書けます","消した作品は、ゴミ箱から30日間もとに戻せます","運営者が作品を見たり、AIの学習に使ったりすることはありません"] },
+];
+function WelcomeIntro({ onClose, onOpenSample, hasSample }) {
+  const [i,setI]=useState(0);
+  const pg=INTRO_PAGES[i]; const last=i===INTRO_PAGES.length-1;
+  const done=(fn)=>{ try { localStorage.setItem(INTRO_KEY,"1"); } catch(e){} fn&&fn(); onClose(); };
+  return (
+    <div style={{ position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.42)",display:"flex",alignItems:"center",justifyContent:"center",padding:"calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))" }}>
+      <div style={{ background:C.bg,borderRadius:22,width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",overflow:"hidden",display:"flex",flexDirection:"column",maxHeight:"100%" }}>
+        <div style={{ display:"flex",justifyContent:"flex-end",padding:"10px 10px 0" }}>
+          {!last&&<button onClick={()=>done()} style={{ background:"none",border:"none",color:C.hint,fontSize:12.5,cursor:"pointer",padding:"6px 8px",fontFamily:"inherit" }}>スキップ</button>}
+          {last&&<div style={{ height:31 }}/>}
+        </div>
+        <div style={{ padding:"6px 26px 4px",textAlign:"center",overflowY:"auto" }}>
+          <IntroArt kind={pg.art}/>
+          <div style={{ fontFamily:C.display,fontSize:19,color:C.text,margin:"18px 0 10px" }}>{pg.title}</div>
+          {pg.body&&<div style={{ fontSize:13,color:C.sub,lineHeight:1.95,whiteSpace:"pre-line" }}>{pg.body}</div>}
+          {pg.list&&<div style={{ display:"flex",flexDirection:"column",gap:9,textAlign:"left",marginTop:2 }}>{pg.list.map(t=>(
+            <div key={t} style={{ display:"flex",gap:9,alignItems:"flex-start" }}><div style={{ marginTop:3,flexShrink:0 }}><Ico n="check" s={14} c={C.accent}/></div><span style={{ fontSize:12.5,color:C.sub,lineHeight:1.75 }}>{t}</span></div>
+          ))}</div>}
+        </div>
+        <div style={{ display:"flex",justifyContent:"center",gap:6,padding:"18px 0 14px" }}>
+          {INTRO_PAGES.map((_,k)=><button key={k} onClick={()=>setI(k)} aria-label={`${k+1}ページ目`} style={{ width:k===i?18:7,height:7,borderRadius:4,border:"none",padding:0,background:k===i?C.accent:C.border,cursor:"pointer",transition:"width 0.2s" }}/>)}
+        </div>
+        <div style={{ padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:8 }}>
+          {!last&&<div style={{ display:"flex",gap:8 }}>
+            {i>0&&<Btn onClick={()=>setI(i-1)}>戻る</Btn>}
+            <div style={{ flex:1 }}><Btn variant="primary" full onClick={()=>setI(i+1)}>次へ</Btn></div>
+          </div>}
+          {last&&<>
+            {hasSample&&<Btn variant="primary" full icon="book" onClick={()=>done(onOpenSample)}>見本の作品を開いてみる</Btn>}
+            <Btn full variant={hasSample?"default":"primary"} onClick={()=>done()}>はじめる</Btn>
+          </>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3377,7 +3468,7 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
+function SettingsScreen({ onShowIntro, page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
   const [premOpen,setPremOpen]=useState(false);
@@ -3517,7 +3608,8 @@ function SettingsScreen({ page, onPage, onBack, theme, dark, serifHeads, fontKey
   const support = (<>
     <SetGroup>
       <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
-      <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")} last/>
+      <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")}/>
+      <SetRow icon="sparkle" label="はじめての案内をもう一度見る" onClick={onShowIntro} last/>
     </SetGroup>
     <SetGroup>
       <SetRow icon="mail" label="改善・ご要望を送る" sub={CONTACT_EMAIL} onClick={()=>openExternal("mailto:"+CONTACT_EMAIL+"?subject="+encodeURIComponent("Tsuzu Loom へのご意見（v"+APP_VERSION+"）"))}/>
@@ -3623,6 +3715,7 @@ function App() {
   const [fontKey,setFontKey]=useState(localStorage.getItem("tl_font")||"sans");
   const [isPremium,setIsPremium]=useState(localStorage.getItem("tl_prem")==="1");
   const metaSettingsRef=useRef({});
+  const [introOpen,setIntroOpen]=useState(()=>{ try { return localStorage.getItem(INTRO_KEY)!=="1"; } catch(e){ return false; } });
   const [, forceRender]=useState(0);
 
   // プレミアムでなければ、プレミアムのテーマ・書体は標準に戻して表示する
@@ -3964,13 +4057,14 @@ function App() {
   return (
     <div style={{ height:"100%",maxWidth:isDesktop?"none":480,margin:"0 auto",background:C.bg,position:"relative",overflow:"hidden" }}>
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
+      {screen==="list"&&introOpen&&stories&&<WelcomeIntro onClose={()=>setIntroOpen(false)} hasSample={stories.some(x=>/^見本/.test(x.title||""))} onOpenSample={()=>{ const sm=stories.find(x=>/^見本/.test(x.title||"")); if(sm) openStory(sm.id); }}/>}
       {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>{ setSection(null); setScreen("settings"); }} onOpenIdeas={()=>setScreen("ideas")}/>}
       {screen==="editor"&&(openData
         ? <StoryEditor data={openData} setData={setOpenData} onBack={backToList} saveStatus={saveStatus} saveError={saveError} online={online} onRetrySave={()=>pushSave(openData,openId)} route={{section,charId:charRoute}} onNavigate={(sec,chId)=>{ setSection(sec); setCharRoute(chId); }} isPremium={isPremium}/>
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen page={section} onPage={setSection} onBack={()=>{ setSection(null); setScreen("list"); }} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>{ setSection("data"); setScreen("trash"); }}/>}
+      {screen==="settings"&&<SettingsScreen onShowIntro={()=>{ setIntroOpen(true); setSection(null); setScreen("list"); }} page={section} onPage={setSection} onBack={()=>{ setSection(null); setScreen("list"); }} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>{ setSection("data"); setScreen("trash"); }}/>}
       {screen==="trash"&&<TrashScreen onBack={()=>{ setSection("data"); setScreen("settings"); }} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
       {syncNotice&&(
