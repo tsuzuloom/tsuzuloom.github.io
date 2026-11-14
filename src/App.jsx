@@ -2564,6 +2564,8 @@ const SITE_URL = "https://tsuzuloom.github.io/";
 const DOCS_URL = SITE_URL + "docs/";
 const CONTACT_EMAIL = "tsuzuloom.app@gmail.com";
 const DISCORD_URL = "https://discord.gg/gmTCxMj3G";
+// 支援ページ。App Store の決まりで、iPhoneアプリには出さない（Web版だけ）
+const FANBOX_URL = "";
 const isNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } };
 const openExternal = (url) => { if(url.startsWith("mailto:")) { window.location.href = url; return; } window.open(url, "_blank", "noopener"); };
 
@@ -2814,6 +2816,9 @@ function SettingsScreen({ page, onPage, onBack, theme, dark, serifHeads, fontKey
       <SetRow icon="chat" label="Discordコミュニティ" onClick={()=>openExternal(DISCORD_URL)} last={!native}/>
       {native&&<SetRow icon="monitor" label="Webサイト版を開く" sub="パソコンからも同じデータを使えます" onClick={()=>openExternal(SITE_URL)} last/>}
     </SetGroup>
+    {!native&&FANBOX_URL&&<SetGroup title="開発を応援する">
+      <SetRow icon="sparkle" label="pixivFANBOXで応援する" sub="開発のようすや、これからの予定をお届けしています" onClick={()=>openExternal(FANBOX_URL)} last/>
+    </SetGroup>}
   </>);
 
   const about = (<>
