@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.2";
+const APP_VERSION = "0.14.3";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -3715,6 +3715,8 @@ function App() {
   const skipSaveRef=useRef(false); // 読み込み直後の setOpenData では保存しない
   const pendingRef=useRef(null);   // まだサーバーに送っていない編集 {id,payload}
   const openIdRef=useRef(null);    // いま開いている作品（同期処理から参照）
+  const openDataRef=useRef(null);  // いま表示している作品データ（読み込み中に書き始めたかの判定用）
+  openDataRef.current=openData;
   const [screen,setScreen]=useState("list");
   const [section,setSection]=useState(null);      // 作品の中のどの画面か
   const [charRoute,setCharRoute]=useState(null);  // 人物ページを開いているか
@@ -3743,21 +3745,30 @@ function App() {
   useEffect(()=>{
     if(!session){ setStories(null); setOpenId(null); setOpenData(null); setIdeas([]); return; }
     (async()=>{
+      // 端末に控えてある一覧があれば、通信を待たずにまず出す
+      try { const cached=await localDB.get("kv", `${session.user.id}:list`); if(cached&&Array.isArray(cached)) setStories(prev=>prev||cached); } catch(e){}
       try {
-        let { data:meta } = await db.from("user_meta").select("*").eq("user_id",session.user.id).maybeSingle();
+        // 設定・プラン・作品一覧は、順番待ちせずに同時に取りにいく
+        const [metaR, entR, rowsR] = await Promise.all([
+          db.from("user_meta").select("*").eq("user_id",session.user.id).maybeSingle(),
+          db.from("entitlements").select("premium,expires_at").eq("user_id",session.user.id).maybeSingle(),
+          db.from("stories").select("id,title,sort_order,updated_at,summary").eq("user_id",session.user.id).is("deleted_at",null).order("sort_order",{ascending:true}),
+        ]);
+        if(metaR.error) throw metaR.error;
+        if(rowsR.error) throw rowsR.error;
+        let meta = metaR.data;
         if(!meta){ await db.from("user_meta").insert({user_id:session.user.id,ideas:[],settings:{}}); meta={ideas:[],settings:{}}; }
         setIdeas(meta.ideas||[]);
         metaSettingsRef.current = meta.settings||{};
-        try {
-          const { data:ent } = await db.from("entitlements").select("premium,expires_at").eq("user_id",session.user.id).maybeSingle();
+        if(!entR.error){
+          const ent=entR.data;
           const prem = !!(ent&&ent.premium&&(!ent.expires_at||Date.parse(ent.expires_at)>Date.now()));
           setIsPremium(prem); localStorage.setItem("tl_prem",prem?"1":"0");
-        } catch(e){}
+        }
         if(meta.settings&&meta.settings.fontKey&&FONTS[meta.settings.fontKey]){ setFontKey(meta.settings.fontKey); localStorage.setItem("tl_font",meta.settings.fontKey); }
         if(meta.settings){ if(meta.settings.theme){ setTheme(meta.settings.theme); localStorage.setItem("sc_theme",meta.settings.theme);} if(typeof meta.settings.darkMode==="boolean"){ setDark(meta.settings.darkMode); localStorage.setItem("sc_dark",meta.settings.darkMode?"1":"0"); } if(typeof meta.settings.serifHeads==="boolean"){ setSerifHeads(meta.settings.serifHeads); localStorage.setItem("tl_serif",meta.settings.serifHeads?"1":"0"); } }
-        // ゴミ箱に入れてから30日たった作品は完全に削除する
-        try { await db.from("stories").delete().eq("user_id",session.user.id).lt("deleted_at",new Date(Date.now()-TRASH_DAYS*864e5).toISOString()); } catch(e){ console.error(e); }
-        let { data:rows } = await db.from("stories").select("id,title,sort_order,updated_at,summary").eq("user_id",session.user.id).is("deleted_at",null).order("sort_order",{ascending:true});
+        // ゴミ箱で30日たった作品は、サーバー側が毎日まとめて削除する（ここでは待たない）
+        let rows = rowsR.data;
         // 一度も作品がなく、見本もまだ入れていない人にだけ見本を1つ用意する
         if((!rows||rows.length===0) && !(meta.settings&&meta.settings.sampleDone)){
           try {
@@ -3937,39 +3948,55 @@ function App() {
   const changeFont=(k)=>{ setFontKey(k); localStorage.setItem("tl_font",k); forceRender(x=>x+1); saveSettings({fontKey:k}); };
 
   const openStory=async(id,sec,chId)=>{
-    setScreen("editor"); setOpenId(id); setOpenData(null); setLoadError("");
+    setScreen("editor"); setOpenId(id); openIdRef.current=id; setOpenData(null); setLoadError("");
     setSection(sec||null); setCharRoute(chId||null);
     const uid=session.user.id;
     const local=await localGetStory(uid,id);
+    if(openIdRef.current!==id) return;
+    // 端末に控えがあれば、通信を待たずにまずそれを開く
+    let shown=null;
+    if(local){
+      baseAtRef.current[id]=local.baseServerAt||null; skipSaveRef.current=true;
+      shown=norm(local.data); openDataRef.current=shown; setOpenData(shown); setSaveStatus(local.dirty?"local":"saved");
+    }
     let row=null;
     try {
       const { data, error } = await db.from("stories").select("title,data,updated_at").eq("id",id).is("deleted_at",null).single();
       if(error) throw error;
       row=data;
     } catch(e){
-      if(local){ baseAtRef.current[id]=local.baseServerAt||null; skipSaveRef.current=true; setOpenData(norm(local.data)); setSaveStatus(local.dirty?"local":"saved"); return; }
+      if(openIdRef.current!==id) return;
+      if(local) return;   // 控えを開いたまま
       setLoadError(navigator.onLine===false ? "インターネットに接続していません。この作品はまだこの端末に保存されていないため、電波の届く場所で一度開いてください。" : (e&&e.message?e.message:"作品を読み込めませんでした。"));
       return;
     }
+    if(openIdRef.current!==id) return;
+    const untouched = ()=>openDataRef.current===shown;   // 控えを開いてから、まだ何も書いていない
     if(local&&local.dirty){
       const serverAt=Date.parse(row.updated_at), baseAt=local.baseServerAt?Date.parse(local.baseServerAt):null;
       const serverChanged = baseAt!==null && serverAt!==baseAt;
-      if(serverChanged && serverAt>local.localAt){
+      if(serverChanged && serverAt>local.localAt && untouched()){
         await backupToTrash(uid,local.title,local.data,"この端末");
         setSyncNotice("オフライン中に書いた内容より、別の端末で保存された内容の方が新しかったため、そちらを開きました。オフライン中の内容は「ゴミ箱」に控えとして入っています。");
       } else {
         if(serverChanged){ await backupToTrash(uid,row.title,row.data,"別の端末"); setSyncNotice("別の端末で保存された内容と重なりました。新しい方（この端末で書いた内容）を残し、別の端末の内容は「ゴミ箱」に控えとして入れました。"); }
         baseAtRef.current[id]=row.updated_at;
-        setOpenData(norm(local.data));   // 端末の内容を開いて、そのままサーバーへ送る
+        // 端末の内容をそのままサーバーへ送る
+        if(untouched()) pushSave(local.data,id);
         return;
       }
     }
+    // 控えがサーバーと同じなら、そのまま
+    if(local&&!local.dirty&&local.baseServerAt===row.updated_at) return;
+    // サーバーの方が新しい：まだ書き始めていなければ差し替える（書き始めていたら、保存のときに控えを作って調整される）
+    if(shown&&!untouched()) return;
     baseAtRef.current[id]=row.updated_at;
     await localPutStory(uid,id,{ data:row.data,title:row.title,localAt:Date.now(),baseServerAt:row.updated_at,dirty:false });
     writeStoryFile(uid,id,row.data,(stories||[]).map(x=>x.title));
+    if(openIdRef.current!==id||(shown&&!untouched())) return;
     skipSaveRef.current=true;
     setSaveStatus("saved");
-    setOpenData(norm(row?row.data:{}));
+    const fresh=norm(row?row.data:{}); openDataRef.current=fresh; setOpenData(fresh);
   };
   const backToList=()=>{ const p=pendingRef.current; if(p&&session) pushSave(p.payload,p.id); setScreen("list"); setOpenId(null); setOpenData(null); setSection(null); setCharRoute(null); };
 
