@@ -2470,7 +2470,8 @@ function ChangeEmailDialog({ current, onClose }) {
   const [msg,setMsg]=useState(null); // {ok:bool,text}
   const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.trim().toLowerCase()!==(current||"").toLowerCase();
   const run=async()=>{
-    if(!valid||busy) return;
+    if(busy) return;
+    if(!valid){ setMsg({ ok:false, text: email.trim().toLowerCase()===(current||"").toLowerCase() ? "今と同じメールアドレスです。" : "メールアドレスの形式を確認してください。" }); return; }
     setBusy(true); setMsg(null);
     const { error } = await db.auth.updateUser({ email: email.trim() }, { emailRedirectTo: SITE_URL });
     setBusy(false);
@@ -2479,7 +2480,7 @@ function ChangeEmailDialog({ current, onClose }) {
       setMsg({ ok:false, text: rate ? "短い時間に何度も送信されたため、受け付けられませんでした。しばらく時間をおいてからお試しください。" : "変更できませんでした。\n（"+error.message+"）" });
       return;
     }
-    setMsg({ ok:true, text:"確認メールを送りました。メールのリンクを開くと変更が完了します。\n今のアドレスと新しいアドレスの両方に確認メールが届く場合は、両方のリンクを開いてください。届かないときは迷惑メールフォルダもご確認ください。" });
+    setMsg({ ok:true, text:"今のアドレスと新しいアドレスの両方に、確認メールを送りました。\n両方のメールのリンクを開くと、変更が完了します。届かないときは迷惑メールフォルダもご確認ください。" });
   };
   return (
     <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }} onClick={e=>{ if(e.target===e.currentTarget&&!busy) onClose(); }}>
@@ -2579,7 +2580,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         </SetGroup>
 
         <SetGroup title="データ">
-          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品を${TRASH_DAYS}日間まで元に戻せます`} onClick={onOpenTrash} last/>
+          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last/>
         </SetGroup>
 
         <SetGroup title="サポート">
