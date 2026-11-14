@@ -208,6 +208,11 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     dots:<><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/></>,
     bulb:<><path d="M9 18h6M10 21h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/></>,
     moon:<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>,
+    mail:<><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></>,
+    chat:<><path d="M20 15a2 2 0 01-2 2H8l-4 4V6a2 2 0 012-2h12a2 2 0 012 2z"/></>,
+    doc:<><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></>,
+    shield:<><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10c-4-1.5-7-5.5-7-10V6z"/></>,
+    monitor:<><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></>,
     sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
     grid:<><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
     filter:<><path d="M4 5.5h16l-6.2 7.3V19l-3.6 1.8v-8L4 5.5z"/></>,
@@ -452,7 +457,7 @@ const Modal = ({ title, onClose, children, footer, compact }) => { const isDeskt
     </div>
   );
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:1000,background:C.bg,display:"flex",flexDirection:"column" }}>
+    <div style={{ position:"fixed",inset:0,paddingTop:"env(safe-area-inset-top, 0px)",zIndex:1000,background:C.bg,display:"flex",flexDirection:"column" }}>
       <div style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
         <button onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3,flexShrink:0 }}><Ico n="back" s={17} c={C.accent}/><span style={{ fontSize:12.5,color:C.accent }}>戻る</span></button>
         <span style={{ fontFamily:C.display,fontSize:15.5,color:C.text,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{title}</span>
@@ -855,7 +860,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
   return (
     <div style={embedded
       ? { flex:1,minWidth:0,background:C.bg,display:"flex",flexDirection:"column",overflow:"hidden" }
-      : { position:"fixed",inset:0,zIndex:900,background:C.bg,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",animation:"tlSlideUp 0.18s ease-out" }}>
+      : { position:"fixed",inset:0,paddingTop:"env(safe-area-inset-top, 0px)",zIndex:900,background:C.bg,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",animation:"tlSlideUp 0.18s ease-out" }}>
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 10px 10px 6px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
         <button onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="back" s={17} c={acc}/><span style={{ fontSize:12.5,color:acc }}>人物一覧</span></button>
         <span style={{ fontSize:12,color:C.hint }}>人物</span>
@@ -1342,7 +1347,7 @@ const SearchScreen = ({ data, onClose, onOpenItem }) => {
   results.forEach(r=>{ if(!grouped[r.kind]) grouped[r.kind]=[]; grouped[r.kind].push(r); });
   const Hi=({text})=>{ if(!query||!text.includes(query)) return <span>{text}</span>; const parts=text.split(query); return <span>{parts.map((p,i)=>(<React.Fragment key={i}>{p}{i<parts.length-1?<mark style={{ background:C.accent+"40",color:C.text,padding:"0 1px",borderRadius:2 }}>{query}</mark>:null}</React.Fragment>))}</span>; };
   return (
-    <div style={{ position:"fixed",inset:0,zIndex:1500,background:C.bg,display:"flex",flexDirection:"column",maxWidth:isDesktop?780:480,margin:"0 auto",borderLeft:isDesktop?`0.5px solid ${C.border}`:"none",borderRight:isDesktop?`0.5px solid ${C.border}`:"none" }}>
+    <div style={{ position:"fixed",inset:0,paddingTop:"env(safe-area-inset-top, 0px)",zIndex:1500,background:C.bg,display:"flex",flexDirection:"column",maxWidth:isDesktop?780:480,margin:"0 auto",borderLeft:isDesktop?`0.5px solid ${C.border}`:"none",borderRight:isDesktop?`0.5px solid ${C.border}`:"none" }}>
       <div style={{ display:"flex",alignItems:"center",gap:8,padding:"12px 12px 10px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
         <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="人物・シーン・用語などを横断検索..." style={{ ...IS(),background:C.bg }}/>
         <button onClick={onClose} style={{ border:"none",background:"transparent",cursor:"pointer",padding:6,display:"flex",flexShrink:0 }}><Ico n="x" s={20} c={C.sub}/></button>
@@ -2189,7 +2194,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       )}
       {viewedChar&&<CharacterView key={viewedChar.id} char={viewedChar} data={data} onClose={()=>goSection("characters",null)} onEdit={()=>setModal({type:"character",item:viewedChar})} onJump={id=>openChar(id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})}/>}
       {defOpen&&(
-        <div style={{ position:"fixed",inset:0,zIndex:1400,background:C.bg,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column" }}>
+        <div style={{ position:"fixed",inset:0,paddingTop:"env(safe-area-inset-top, 0px)",zIndex:1400,background:C.bg,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column" }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,padding:"11px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
             <button onClick={()=>setDefOpen(false)} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="x" s={18} c={C.accent}/><span style={{ fontSize:12,color:C.accent }}>閉じる</span></button>
             <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>その他</span>
@@ -2283,58 +2288,136 @@ function StoryList({ stories, onOpen, onCreate, onDuplicate, onDelete, onRename,
 }
 
 // ===================== SETTINGS =====================
+const SITE_URL = "https://tsuzuloom.github.io/";
+const DOCS_URL = SITE_URL + "docs/";
+const CONTACT_EMAIL = "tsuzuloom.app@gmail.com";
+const DISCORD_URL = "https://discord.gg/gmTCxMj3G";
+const isNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } };
+const openExternal = (url) => { if(url.startsWith("mailto:")) { window.location.href = url; return; } window.open(url, "_blank", "noopener"); };
+
+// アカウント削除：画像 → DB（RPC：stories / user_meta / auth.users）の順に消す
+const deleteMyAccount = async () => {
+  const { data:{ user } } = await db.auth.getUser();
+  if(!user) throw new Error("ログインが切れています。もう一度ログインしてからお試しください。");
+  const paths = new Set();
+  try {
+    const { data:rows } = await db.from("stories").select("data").eq("user_id",user.id);
+    const re = new RegExp(IMG_BUCKET + "/(" + user.id + "/[^\"?#\\s]+)", "g");
+    (rows||[]).forEach(r=>{ const txt=JSON.stringify(r.data||{}); let m; while((m=re.exec(txt))) paths.add(decodeURIComponent(m[1])); });
+  } catch(e){}
+  try {
+    const { data:list } = await db.storage.from(IMG_BUCKET).list(user.id, { limit:1000 });
+    (list||[]).forEach(f=>{ if(f && f.name) paths.add(user.id + "/" + f.name); });
+  } catch(e){}
+  const all=[...paths];
+  for(let i=0;i<all.length;i+=100){ try { await db.storage.from(IMG_BUCKET).remove(all.slice(i,i+100)); } catch(e){} }
+  const { error } = await db.rpc("delete_my_account");
+  if(error) throw new Error("アカウントを削除できませんでした。時間をおいてもう一度お試しください。\n（" + error.message + "）");
+  try { await db.auth.signOut(); } catch(e){}
+};
+
+function DeleteAccountDialog({ onClose }) {
+  const [text,setText]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+  const ok = text.trim()==="削除";
+  const run=async()=>{ if(!ok||busy) return; setBusy(true); setErr(""); try { await deleteMyAccount(); } catch(e){ setErr(e.message||String(e)); setBusy(false); } };
+  return (
+    <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }} onClick={e=>{ if(e.target===e.currentTarget&&!busy) onClose(); }}>
+      <div style={{ background:C.surface,borderRadius:16,padding:20,width:"100%",maxWidth:380,boxShadow:"0 8px 30px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontFamily:C.display,fontSize:17,color:C.danger,marginBottom:10 }}>アカウントを削除</div>
+        <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.9,marginBottom:14 }}>アカウントと、すべての作品・人物・画像が完全に削除されます。<b style={{ color:C.text }}>元には戻せません。</b><br/>よろしければ、下の欄に「削除」と入力してください。</div>
+        <input value={text} onChange={e=>setText(e.target.value)} placeholder="削除" disabled={busy} style={{ width:"100%",padding:"11px 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:C.bg,color:C.text,marginBottom:12 }}/>
+        {err&&<div style={{ fontSize:11.5,color:C.danger,lineHeight:1.7,marginBottom:12,whiteSpace:"pre-wrap" }}>{err}</div>}
+        <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
+          <Btn variant="ghost" onClick={()=>{ if(!busy) onClose(); }}>キャンセル</Btn>
+          <button onClick={run} disabled={!ok||busy} style={{ padding:"11px 16px",borderRadius:10,border:"none",background:ok?C.danger:C.border,color:"#fff",fontSize:13,fontWeight:600,cursor:ok&&!busy?"pointer":"default",fontFamily:"inherit",minHeight:44 }}>{busy?"削除中...":"完全に削除する"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SetGroup = ({ title, children }) => (
+  <div style={{ marginBottom:22 }}>
+    {title&&<div style={{ fontSize:11,fontWeight:600,color:C.hint,letterSpacing:"0.5px",padding:"0 4px 7px" }}>{title}</div>}
+    <div style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:14,overflow:"hidden" }}>{children}</div>
+  </div>
+);
+const SetRow = ({ icon, label, sub, onClick, right, danger, last }) => (
+  <button onClick={onClick} style={{ display:"flex",alignItems:"center",gap:12,width:"100%",padding:"13px 14px",background:"transparent",border:"none",borderBottom:last?"none":`0.5px solid ${C.borderL}`,cursor:onClick?"pointer":"default",fontFamily:"inherit",textAlign:"left",minHeight:50 }}>
+    {icon&&<Ico n={icon} s={18} c={danger?C.danger:C.sub}/>}
+    <div style={{ flex:1,minWidth:0 }}>
+      <div style={{ fontSize:13.5,color:danger?C.danger:C.text }}>{label}</div>
+      {sub&&<div style={{ fontSize:11,color:C.hint,marginTop:2 }}>{sub}</div>}
+    </div>
+    {right!==undefined?right:(onClick&&<Ico n="chevR" s={15} c={C.hint}/>)}
+  </button>
+);
+const Toggle = ({ on }) => (
+  <div style={{ width:42,height:24,borderRadius:12,background:on?C.accent:C.border,position:"relative",transition:"background 0.2s",flexShrink:0 }}>
+    <div style={{ position:"absolute",top:2,left:on?20:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+  </div>
+);
+
 function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, onLogout }) {
+  const [delOpen,setDelOpen]=useState(false);
+  const native=isNativeApp();
   return (
     <div style={{ height:"100%",display:"flex",flexDirection:"column" }}>
       <div style={{ display:"flex",alignItems:"center",gap:8,padding:"11px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
         <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="chevL" s={18} c={C.accent}/><span style={{ fontSize:12,color:C.accent }}>戻る</span></button>
         <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>設定</span>
       </div>
-      <div style={{ flex:1,overflowY:"auto",padding:16 }}>
+      <div style={{ flex:1,overflowY:"auto",padding:"16px 16px calc(24px + env(safe-area-inset-bottom,0px))" }}>
         <div style={{ maxWidth:620,margin:"0 auto" }}>
-        <Field label="テーマ">
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-            {Object.entries(THEMES).map(([key,t])=>(
-              <button key={key} onClick={()=>onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"12px",borderRadius:12,border:`1.5px solid ${theme===key?C.accent:C.border}`,background:theme===key?C.accent+"12":C.surface,cursor:"pointer",fontFamily:"inherit" }}>
-                <div style={{ width:22,height:22,borderRadius:7,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
-                <span style={{ fontSize:13,fontWeight:theme===key?600:400,color:C.text }}>{t.label}</span>
-                {theme===key&&<div style={{ marginLeft:"auto" }}><Ico n="check" s={15} c={C.accent}/></div>}
-              </button>
-            ))}
+
+        <SetGroup title="アカウント">
+          <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
+          <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
+        </SetGroup>
+
+        <SetGroup title="表示">
+          <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
+            <div style={{ fontSize:12,color:C.sub,marginBottom:10 }}>テーマ</div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              {Object.entries(THEMES).map(([key,t])=>(
+                <button key={key} onClick={()=>onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${theme===key?C.accent:C.border}`,background:theme===key?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit" }}>
+                  <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
+                  <span style={{ fontSize:12.5,fontWeight:theme===key?600:400,color:C.text }}>{t.label}</span>
+                  {theme===key&&<div style={{ marginLeft:"auto" }}><Ico n="check" s={14} c={C.accent}/></div>}
+                </button>
+              ))}
+            </div>
           </div>
-        </Field>
-        <Divider/>
-        <Field label="表示モード">
-          <button onClick={()=>onDark(!dark)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"12px 14px",borderRadius:12,border:`0.5px solid ${C.border}`,background:C.surface,cursor:"pointer",fontFamily:"inherit" }}>
-            <Ico n={dark?"moon":"sun"} s={18} c={C.accent}/>
-            <span style={{ fontSize:13,color:C.text }}>{dark?"ダークモード":"ライトモード"}</span>
-            <div style={{ marginLeft:"auto",width:42,height:24,borderRadius:12,background:dark?C.accent:C.border,position:"relative",transition:"background 0.2s" }}>
-              <div style={{ position:"absolute",top:2,left:dark?20:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
-            </div>
-          </button>
-        </Field>
-        <Divider/>
-        <Field label="見出しの書体">
-          <button onClick={()=>onSerif(!serifHeads)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"12px 14px",borderRadius:12,border:`0.5px solid ${C.border}`,background:C.surface,cursor:"pointer",fontFamily:"inherit" }}>
-            <span style={{ fontFamily:C.display,fontSize:17,color:C.text,width:26,textAlign:"center" }}>綴</span>
-            <span style={{ fontSize:13,color:C.text }}>{serifHeads?"明朝":"ゴシック"}</span>
-            <div style={{ marginLeft:"auto",width:42,height:24,borderRadius:12,background:serifHeads?C.accent:C.border,position:"relative",transition:"background 0.2s" }}>
-              <div style={{ position:"absolute",top:2,left:serifHeads?20:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
-            </div>
-          </button>
-          <div style={{ fontSize:11,color:C.hint,lineHeight:1.7,marginTop:7 }}>作品名や人物名など、見出しにあたる文字だけ書体が変わります。</div>
-        </Field>
-        <Divider/>
-        <Field label="アカウント">
-          <div style={{ fontSize:12,color:C.sub,padding:"4px 2px 12px" }}>{email}</div>
-          <Btn variant="default" icon="logout" full onClick={onLogout}>ログアウト</Btn>
-        </Field>
-        <div style={{ textAlign:"center",marginTop:28,opacity:0.55 }}>
+          <SetRow icon={dark?"moon":"sun"} label="ダークモード" onClick={()=>onDark(!dark)} right={<Toggle on={dark}/>}/>
+          <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
+        </SetGroup>
+
+        <SetGroup title="サポート">
+          <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
+          <SetRow icon="mail" label="改善・ご要望を送る" sub={CONTACT_EMAIL} onClick={()=>openExternal("mailto:"+CONTACT_EMAIL+"?subject="+encodeURIComponent("Tsuzu Loom へのご意見（v"+APP_VERSION+"）"))}/>
+          <SetRow icon="chat" label="Discordコミュニティ" onClick={()=>openExternal(DISCORD_URL)} last={!native}/>
+          {native&&<SetRow icon="monitor" label="Webサイト版を開く" sub="パソコンからも同じデータを使えます" onClick={()=>openExternal(SITE_URL)} last/>}
+        </SetGroup>
+
+        <SetGroup title="このアプリについて">
+          <SetRow icon="doc" label="利用規約" onClick={()=>openExternal(DOCS_URL+"terms.html")}/>
+          <SetRow icon="shield" label="プライバシーポリシー" onClick={()=>openExternal(DOCS_URL+"privacy.html")}/>
+          <SetRow icon="info" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
+        </SetGroup>
+
+        <SetGroup>
+          <SetRow icon="trash" label="アカウントを削除" danger onClick={()=>setDelOpen(true)} right={null} last/>
+        </SetGroup>
+
+        <div style={{ textAlign:"center",marginTop:8,opacity:0.55 }}>
           <div style={{ fontSize:12,fontWeight:600,color:C.sub,letterSpacing:"-0.2px" }}>Tsuzu Loom</div>
           <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}（ベータ）</div>
         </div>
         </div>
       </div>
+      {delOpen&&<DeleteAccountDialog onClose={()=>setDelOpen(false)}/>}
     </div>
   );
 }
