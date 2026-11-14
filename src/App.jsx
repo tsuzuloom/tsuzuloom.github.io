@@ -2771,6 +2771,7 @@ function App() {
   const baseAtRef=useRef({});      // 作品ID -> 最後に確認したサーバー側の updated_at
   const skipSaveRef=useRef(false); // 読み込み直後の setOpenData では保存しない
   const pendingRef=useRef(null);   // まだサーバーに送っていない編集 {id,payload}
+  const openIdRef=useRef(null);    // いま開いている作品（同期処理から参照）
   const [screen,setScreen]=useState("list");
   const [section,setSection]=useState(null);      // 作品の中のどの画面か
   const [charRoute,setCharRoute]=useState(null);  // 人物ページを開いているか
@@ -2810,7 +2811,7 @@ function App() {
           await db.from("user_meta").update({ settings:{...(meta.settings||{}),sampleDone:true} }).eq("user_id",session.user.id);
         }
         setStories((rows||[]).map(r=>({ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null })));
-        syncAllDirty(session.user.id, null);
+        syncAllDirty(session.user.id, openIdRef.current);
       } catch(e){
         console.error(e);
         // 電波がないときは、この端末に残っている一覧を出す
@@ -2819,7 +2820,7 @@ function App() {
         else { setLoadError(navigator.onLine===false ? "インターネットに接続していません。電波の届く場所でもう一度お試しください。" : (e&&e.message?e.message:"データを読み込めませんでした。")); setStories([]); }
       }
     })();
-  },[session]);
+  },[session?.user?.id]);
 
   // 作品一覧をこの端末にも控えておく（オフラインで開いたとき用）
   useEffect(()=>{ if(session&&stories) localDB.set("kv", `${session.user.id}:list`, stories); },[session,stories]);
@@ -2836,7 +2837,7 @@ function App() {
     if(navigator.onLine===false) return;
     const ids=await localDirtyIds(uid);
     for(const id of ids){
-      if(id===exceptId) continue;
+      if(id===exceptId||id===openIdRef.current) continue;
       const local=await localGetStory(uid,id); if(!local||!local.dirty) continue;
       const { data:row, error } = await db.from("stories").select("title,data,updated_at,deleted_at").eq("id",id).maybeSingle();
       if(error) continue;
@@ -2965,8 +2966,9 @@ function App() {
     if(!online||!session) return;
     const p=pendingRef.current;
     if(p&&p.id===openId) pushSave(p.payload,p.id);
-    syncAllDirty(session.user.id, openId);
+    syncAllDirty(session.user.id, openIdRef.current);
   },[online]);
+  useEffect(()=>{ openIdRef.current=openId; },[openId]);
 
   const saveMeta=useCallback(async(patch)=>{ if(!session) return; await db.from("user_meta").update({...patch,updated_at:new Date().toISOString()}).eq("user_id",session.user.id); },[session]);
 
