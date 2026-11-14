@@ -6,7 +6,7 @@ import { Share } from '@capacitor/share';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.8.0";
+const APP_VERSION = "0.9.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -46,6 +46,75 @@ const uploadImage = async (blob) => {
   return db.storage.from(IMG_BUCKET).getPublicUrl(path).data.publicUrl;
 };
 const isEmbedded = (src) => !!src && src.startsWith("data:");
+
+// ===== 端末内の保存（IndexedDB）：オフラインでも書けるようにする =====
+// stories: `${userId}:${storyId}` -> { data, title, localAt(ms), baseServerAt(ISO|null), dirty(bool) }
+// kv:      `${userId}:list` -> 作品一覧のキャッシュ ／ `${userId}:file:${storyId}` -> ファイルアプリでのファイル名
+const localDB = (() => {
+  let opening = null;
+  const open = () => opening || (opening = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open("tsuzuloom", 1);
+      r.onupgradeneeded = () => { const d = r.result; if(!d.objectStoreNames.contains("stories")) d.createObjectStore("stories"); if(!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => { opening = null; rej(r.error); };
+    } catch(e){ opening = null; rej(e); }
+  }));
+  const run = async (store, mode, fn) => {
+    const d = await open();
+    return new Promise((res, rej) => {
+      const t = d.transaction(store, mode); const req = fn(t.objectStore(store));
+      t.oncomplete = () => res(req ? req.result : undefined);
+      t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  };
+  const safe = (f) => async (...a) => { try { return await f(...a); } catch(e){ console.warn("localDB", e); return undefined; } };
+  return {
+    get: safe((store, key) => run(store, "readonly", s => s.get(key))),
+    set: safe((store, key, val) => run(store, "readwrite", s => s.put(val, key))),
+    del: safe((store, key) => run(store, "readwrite", s => s.delete(key))),
+    keys: safe((store) => run(store, "readonly", s => s.getAllKeys())),
+  };
+})();
+const lkey = (uid, id) => `${uid}:${id}`;
+const localGetStory = (uid, id) => localDB.get("stories", lkey(uid, id));
+const localPutStory = (uid, id, rec) => localDB.set("stories", lkey(uid, id), rec);
+const localDelStory = (uid, id) => localDB.del("stories", lkey(uid, id));
+const localDirtyIds = async (uid) => {
+  const ks = (await localDB.keys("stories")) || [];
+  const out = [];
+  for(const k of ks){ if(typeof k==="string" && k.startsWith(uid+":")){ const rec = await localDB.get("stories", k); if(rec && rec.dirty) out.push(k.slice(uid.length+1)); } }
+  return out;
+};
+const localClearUser = async (uid) => {
+  for(const st of ["stories","kv"]){ const ks=(await localDB.keys(st))||[]; for(const k of ks){ if(typeof k==="string"&&k.startsWith(uid+":")) await localDB.del(st,k); } }
+};
+
+// ===== iPhoneの「ファイル」アプリへの保存（このiPhone内 › Tsuzu Loom） =====
+const filesEnabled = () => { try { return Capacitor.isNativePlatform() && localStorage.getItem("tl_files")!=="0"; } catch(e){ return false; } };
+const fileTimers = {};
+const writeStoryFile = (uid, id, data, allTitles) => {
+  if(!filesEnabled() || !data) return;
+  clearTimeout(fileTimers[id]);
+  fileTimers[id] = setTimeout(async () => {
+    try {
+      const title = data.storyTitle || "無題";
+      const dup = (allTitles||[]).filter(t => (t||"") === title).length > 1;
+      const name = safeFileName(dup ? `${title}_${String(id).slice(0,6)}` : title) + ".json";
+      const prev = await localDB.get("kv", `${uid}:file:${id}`);
+      await Filesystem.writeFile({ path: name, data: JSON.stringify(data, null, 2), directory: Directory.Documents, encoding: Encoding.UTF8 });
+      if(prev && prev !== name){ try { await Filesystem.deleteFile({ path: prev, directory: Directory.Documents }); } catch(e){} }
+      await localDB.set("kv", `${uid}:file:${id}`, name);
+    } catch(e){ console.warn("writeStoryFile", e); }
+  }, 1200);
+};
+const deleteStoryFile = async (uid, id) => {
+  if(!Capacitor.isNativePlatform()) return;
+  try { const prev = await localDB.get("kv", `${uid}:file:${id}`); if(prev){ await Filesystem.deleteFile({ path: prev, directory: Directory.Documents }); } } catch(e){}
+  await localDB.del("kv", `${uid}:file:${id}`);
+};
+// 読み込んだJSONが、Tsuzu Loomの作品データらしいか
+const looksLikeStory = (o) => !!o && typeof o==="object" && !Array.isArray(o) && (Array.isArray(o.characters)||Array.isArray(o.scenes)||Array.isArray(o.chapters)||typeof o.storyTitle==="string");
 
 // ファイルの書き出し：Webはダウンロード、iPhoneアプリは共有シート（「ファイルに保存」など）を開く
 const safeFileName = (name) => (name||"file").replace(/[\\/:*?"<>|\n\r]+/g,"_").slice(0,80);
@@ -1886,22 +1955,24 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       ? <button onClick={()=>setSaveOpen(true)} style={{ display:"flex",alignItems:"center",gap:4,border:`0.5px solid ${C.danger}`,background:C.danger+"12",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontFamily:"inherit",flexShrink:0 }}>
           <Ico n="info" s={12} c={C.danger}/><span style={{ fontSize:10.5,color:C.danger }}>保存できていません</span>
         </button>
+    : saveStatus==="local"
+      ? <span style={{ fontSize:10.5,color:C.sub,flexShrink:0 }}>端末に保存</span>
       : <span style={{ fontSize:10.5,color:C.hint,opacity:saveStatus==="saving"?1:0.6,minWidth:44,textAlign:"right",flexShrink:0 }}>{saveStatus==="saving"?"保存中":"✓ 保存"}</span>
   );
   const saveDialog = saveOpen&&(
     <Modal compact title="保存できていません" onClose={()=>setSaveOpen(false)} footer={<><Btn onClick={()=>setSaveOpen(false)}>閉じる</Btn><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>{ onRetrySave&&onRetrySave(); setSaveOpen(false); }}>もう一度保存する</Btn></>}>
       <div style={{ fontSize:13,color:C.text,lineHeight:1.95,marginBottom:12 }}>
-        書いた内容はこの画面には残っていますが、<b>まだ保存できていません</b>。この状態でアプリを閉じると失われます。
+        書いた内容は<b>この端末には保存されています</b>が、まだサーバーに送れていません。つながり次第、自動で送ります。
       </div>
       <div style={{ fontSize:12,color:C.danger,lineHeight:1.8,background:C.danger+"10",border:`0.5px solid ${C.danger}`,borderRadius:10,padding:"10px 12px",marginBottom:12,wordBreak:"break-word" }}>{saveError||"原因が分かりませんでした。"}</div>
       <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.9 }}>
-        電波の届く場所で「もう一度保存する」を押してください。うまくいかないときは、その他 → 作品の設定 →「JSONでバックアップ」で手元に控えておくと安全です。
+        すぐに送りたいときは「もう一度保存する」を押してください。何度やってもうまくいかないときは、その他 → 作品の設定 →「JSONでバックアップ」で手元に控えておくと安全です。
       </div>
     </Modal>
   );
   const offlineBar = online===false&&(
-    <div style={{ background:C.danger+"12",borderBottom:`0.5px solid ${C.danger}`,padding:"7px 14px",fontSize:11.5,color:C.danger,textAlign:"center",flexShrink:0 }}>
-      オフラインです。書いた内容はまだ保存されていません。
+    <div style={{ background:C.tag,borderBottom:`0.5px solid ${C.border}`,padding:"7px 14px",fontSize:11.5,color:C.sub,textAlign:"center",flexShrink:0 }}>
+      オフラインです。書いた内容はこの端末に保存され、つながったら自動で同期されます。
     </div>
   );
   const [imgMig,setImgMig]=useState(null);
@@ -2299,7 +2370,28 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
 }
 
 // ===================== STORY LIST (HOME) =====================
-function StoryList({ stories, onOpen, onCreate, onDuplicate, onDelete, onRename, onMove, onOpenSettings, onOpenIdeas }) {
+function ImportStoryButton({ onImport }) {
+  const ref=useRef(null);
+  const [err,setErr]=useState("");
+  const pick=async(e)=>{
+    const f=e.target.files&&e.target.files[0]; e.target.value="";
+    if(!f) return;
+    try {
+      const obj=JSON.parse(await f.text());
+      if(!looksLikeStory(obj)){ setErr("Tsuzu Loom の作品ファイル（JSON）ではないようです。"); return; }
+      onImport&&onImport(obj);
+    } catch(x){ setErr("ファイルを読み込めませんでした。Tsuzu Loom で書き出したJSONファイルを選んでください。"); }
+  };
+  return (
+    <>
+      <input ref={ref} type="file" accept=".json,application/json" onChange={pick} style={{ display:"none" }}/>
+      <Btn icon="download" onClick={()=>ref.current&&ref.current.click()} title="ファイルから読み込む">読み込む</Btn>
+      {err&&(<Modal compact title="読み込めませんでした" onClose={()=>setErr("")} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setErr("")}>OK</Btn></>}><div style={{ fontSize:13,color:C.text,lineHeight:1.9 }}>{err}</div></Modal>)}
+    </>
+  );
+}
+
+function StoryList({ stories, onOpen, onCreate, onImport, onDuplicate, onDelete, onRename, onMove, onOpenSettings, onOpenIdeas }) {
   const isDesktop=useIsDesktop();
   const [menuFor,setMenuFor]=useState(null);
   const [renameFor,setRenameFor]=useState(null);
@@ -2352,7 +2444,10 @@ function StoryList({ stories, onOpen, onCreate, onDuplicate, onDelete, onRename,
         </div>
       </div>
       <div style={{ position:"absolute",bottom:0,left:0,right:0,padding:"12px 16px calc(16px + env(safe-area-inset-bottom,0px))",background:C.surface,borderTop:`0.5px solid ${C.border}`,maxWidth:isDesktop?"none":480,margin:"0 auto" }}>
-        <div style={{ maxWidth:isDesktop?960:"none",margin:"0 auto" }}><Btn variant="primary" icon="plus" full onClick={onCreate}>新しい作品</Btn></div>
+        <div style={{ maxWidth:isDesktop?960:"none",margin:"0 auto",display:"flex",gap:8 }}>
+          <div style={{ flex:1 }}><Btn variant="primary" icon="plus" full onClick={onCreate}>新しい作品</Btn></div>
+          <ImportStoryButton onImport={onImport}/>
+        </div>
       </div>
       {delFor&&(<Modal compact title="作品を削除" onClose={()=>setDelFor(null)} footer={<><Btn onClick={()=>setDelFor(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="danger" icon="trash" onClick={runDelete}>{deleting?"移動中...":"ゴミ箱に移す"}</Btn></>}>
         <div style={{ fontSize:14,fontWeight:600,color:C.text,marginBottom:8,wordBreak:"break-word" }}>「{delFor.title||"（無題）"}」</div>
@@ -2461,6 +2556,7 @@ const deleteMyAccount = async () => {
   for(let i=0;i<all.length;i+=100){ try { await db.storage.from(IMG_BUCKET).remove(all.slice(i,i+100)); } catch(e){} }
   const { error } = await db.rpc("delete_my_account");
   if(error) throw new Error("アカウントを削除できませんでした。時間をおいてもう一度お試しください。\n（" + error.message + "）");
+  try { await localClearUser(user.id); } catch(e){}
   try { await db.auth.signOut(); } catch(e){}
 };
 
@@ -2542,9 +2638,20 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, onLogout, onOpenTrash }) {
+function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
+  const [filesOn,setFilesOn]=useState(()=>{ try { return localStorage.getItem("tl_files")!=="0"; } catch(e){ return true; } });
+  const [filesMsg,setFilesMsg]=useState("");
+  const toggleFiles=()=>{ const v=!filesOn; setFilesOn(v); try { localStorage.setItem("tl_files",v?"1":"0"); } catch(e){} if(v) saveAllToFiles(); };
+  const saveAllToFiles=async()=>{
+    setFilesMsg("保存中...");
+    const { data, error } = await db.from("stories").select("id,title,data").eq("user_id",userId).is("deleted_at",null);
+    if(error||!data){ setFilesMsg("作品を読み込めませんでした。電波の届く場所でもう一度お試しください。"); return; }
+    const titles=data.map(r=>(r.data&&r.data.storyTitle)||r.title);
+    data.forEach(r=>writeStoryFile(userId,r.id,r.data,titles));
+    setTimeout(()=>setFilesMsg(`${data.length}件の作品を「ファイル」に保存しました。`),1600);
+  };
   const native=isNativeApp();
   return (
     <div style={{ height:"100%",display:"flex",flexDirection:"column" }}>
@@ -2580,7 +2687,9 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         </SetGroup>
 
         <SetGroup title="データ">
-          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last/>
+          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last={!native}/>
+          {native&&<SetRow icon="doc" label="iPhoneの「ファイル」にも保存" sub="ファイル › このiPhone内 › Tsuzu Loom に、作品ごとのファイルを自動で保存します" onClick={toggleFiles} right={<Toggle on={filesOn}/>} last={!filesOn}/>}
+          {native&&filesOn&&<SetRow icon="download" label="すべての作品を今すぐ保存" sub={filesMsg||undefined} onClick={saveAllToFiles} last/>}
         </SetGroup>
 
         <SetGroup title="サポート">
@@ -2658,6 +2767,10 @@ function App() {
   const [saveError,setSaveError]=useState("");
   const [loadError,setLoadError]=useState("");
   const [online,setOnline]=useState(typeof navigator==="undefined"||navigator.onLine!==false);
+  const [syncNotice,setSyncNotice]=useState(null);   // 同期で控えを作ったときのお知らせ
+  const baseAtRef=useRef({});      // 作品ID -> 最後に確認したサーバー側の updated_at
+  const skipSaveRef=useRef(false); // 読み込み直後の setOpenData では保存しない
+  const pendingRef=useRef(null);   // まだサーバーに送っていない編集 {id,payload}
   const [screen,setScreen]=useState("list");
   const [section,setSection]=useState(null);      // 作品の中のどの画面か
   const [charRoute,setCharRoute]=useState(null);  // 人物ページを開いているか
@@ -2697,9 +2810,54 @@ function App() {
           await db.from("user_meta").update({ settings:{...(meta.settings||{}),sampleDone:true} }).eq("user_id",session.user.id);
         }
         setStories((rows||[]).map(r=>({ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null })));
-      } catch(e){ console.error(e); setLoadError(e&&e.message?e.message:"データを読み込めませんでした。"); setStories([]); }
+        syncAllDirty(session.user.id, null);
+      } catch(e){
+        console.error(e);
+        // 電波がないときは、この端末に残っている一覧を出す
+        const cached = await localDB.get("kv", `${session.user.id}:list`);
+        if(cached&&Array.isArray(cached)){ setStories(cached); setLoadError(""); }
+        else { setLoadError(navigator.onLine===false ? "インターネットに接続していません。電波の届く場所でもう一度お試しください。" : (e&&e.message?e.message:"データを読み込めませんでした。")); setStories([]); }
+      }
     })();
   },[session]);
+
+  // 作品一覧をこの端末にも控えておく（オフラインで開いたとき用）
+  useEffect(()=>{ if(session&&stories) localDB.set("kv", `${session.user.id}:list`, stories); },[session,stories]);
+
+  // 控えをゴミ箱に入れる（同期で内容がぶつかったとき、消える側を残しておく）
+  const backupToTrash=useCallback(async(uid,title,data,label)=>{
+    const d=new Date(); const stamp=`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
+    try { await db.from("stories").insert({ user_id:uid, title:`${title||"無題"}（${label}の控え ${stamp}）`, data, sort_order:0, summary:mkSummary(norm(data||{})), deleted_at:new Date().toISOString() }); return true; }
+    catch(e){ console.error(e); return false; }
+  },[]);
+
+  // 端末にだけ残っている編集を、サーバーへ送る（開いていない作品の分）
+  const syncAllDirty=useCallback(async(uid, exceptId)=>{
+    if(navigator.onLine===false) return;
+    const ids=await localDirtyIds(uid);
+    for(const id of ids){
+      if(id===exceptId) continue;
+      const local=await localGetStory(uid,id); if(!local||!local.dirty) continue;
+      const { data:row, error } = await db.from("stories").select("title,data,updated_at,deleted_at").eq("id",id).maybeSingle();
+      if(error) continue;
+      if(!row||row.deleted_at){ await localDelStory(uid,id); continue; }
+      const serverAt=Date.parse(row.updated_at), baseAt=local.baseServerAt?Date.parse(local.baseServerAt):null;
+      const serverChanged = baseAt!==null && serverAt!==baseAt;
+      if(serverChanged && serverAt>local.localAt){
+        // サーバー側（別の端末）の方が新しい：端末の分を控えに
+        await backupToTrash(uid,local.title,local.data,"この端末");
+        await localPutStory(uid,id,{ data:row.data,title:row.title,localAt:Date.now(),baseServerAt:row.updated_at,dirty:false });
+        setSyncNotice("オフライン中に書いた内容より、別の端末で保存された内容の方が新しかったため、そちらを残しました。オフライン中の内容は「ゴミ箱」に控えとして入っています。");
+        continue;
+      }
+      if(serverChanged) { await backupToTrash(uid,row.title,row.data,"別の端末"); setSyncNotice("別の端末で保存された内容と重なりました。新しい方（オフライン中に書いた内容）を残し、別の端末の内容は「ゴミ箱」に控えとして入れました。"); }
+      const summary=mkSummary(norm(local.data));
+      const { data:upd, error:e2 } = await db.from("stories").update({ data:local.data, title:local.data.storyTitle||"新しいストーリー", summary, updated_at:new Date().toISOString() }).eq("id",id).select("updated_at,title");
+      if(e2||!upd||!upd.length) continue;
+      await localPutStory(uid,id,{ ...local, baseServerAt:upd[0].updated_at, dirty:false });
+      setStories(prev=>prev?prev.map(x=>x.id===id?{...x,title:upd[0].title,summary,updated_at:upd[0].updated_at}:x):prev);
+    }
+  },[backupToTrash]);
 
   useEffect(()=>{
     const on=()=>setOnline(true), off=()=>setOnline(false);
@@ -2743,25 +2901,72 @@ function App() {
     else if((window.location.hash||"#/")!=="#/") window.history.replaceState(null,"","#/");
   },[session,stories,recovery]);
 
-  const pushSave = useCallback(async(payload,id)=>{
+  // 保存は1件ずつ順番に送る（前の保存が終わる前に次を送ると、自分の保存同士がぶつかって見えるため）
+  const saveChainRef=useRef(Promise.resolve());
+  const pushSave = useCallback((payload,id)=>{
+    saveChainRef.current = saveChainRef.current.then(()=>doPush(payload,id)).catch(e=>console.error(e));
+    return saveChainRef.current;
+  },[session,backupToTrash]);
+  const doPush = async(payload,id)=>{
+    if(!session) return;
+    const uid=session.user.id;
+    if(navigator.onLine===false){ setSaveStatus("local"); setSaveError(""); return; }
     setSaveStatus("saving"); setSaveError("");
+    const startedAt=Date.now();
     const summary=mkSummary(payload);
+    const fields={ data:payload, title:payload.storyTitle||"新しいストーリー", summary, updated_at:new Date().toISOString() };
     try {
-      const { error } = await db.from("stories").update({ data:payload, title:payload.storyTitle||"新しいストーリー", summary, updated_at:new Date().toISOString() }).eq("id",id);
+      const base=baseAtRef.current[id];
+      let q=db.from("stories").update(fields).eq("id",id).is("deleted_at",null);
+      if(base) q=q.eq("updated_at",base);
+      let { data:upd, error } = await q.select("updated_at");
       if(error) throw error;
-      setStories(prev=>prev?prev.map(s=>s.id===id?{...s,title:payload.storyTitle,summary,updated_at:new Date().toISOString()}:s):prev);
+      if(!upd||upd.length===0){
+        // 別の端末で先に保存されていた（または削除された）
+        const { data:row, error:e3 } = await db.from("stories").select("title,data,updated_at,deleted_at").eq("id",id).maybeSingle();
+        if(e3) throw e3;
+        if(!row||row.deleted_at){ setSaveStatus("error"); setSaveError("この作品はゴミ箱に移されたか、削除されています。書いた内容はこの端末に残っています。必要なら「JSONでバックアップ」で控えてください。"); return; }
+        await backupToTrash(uid,row.title,row.data,"別の端末");
+        setSyncNotice("別の端末で保存された内容と重なりました。いま書いている内容を残し、別の端末の内容は「ゴミ箱」に控えとして入れました。");
+        const r2 = await db.from("stories").update(fields).eq("id",id).select("updated_at");
+        if(r2.error) throw r2.error;
+        upd=r2.data;
+      }
+      const serverAt=upd&&upd[0]?upd[0].updated_at:null;
+      baseAtRef.current[id]=serverAt;
+      const rec=await localGetStory(uid,id);
+      if(rec&&rec.localAt>startedAt) await localPutStory(uid,id,{ ...rec, baseServerAt:serverAt });
+      else await localPutStory(uid,id,{ data:payload,title:payload.storyTitle,localAt:startedAt,baseServerAt:serverAt,dirty:false });
+      if(pendingRef.current&&pendingRef.current.id===id&&pendingRef.current.payload===payload) pendingRef.current=null;
+      setStories(prev=>prev?prev.map(s=>s.id===id?{...s,title:payload.storyTitle,summary,updated_at:serverAt||s.updated_at}:s):prev);
       setSaveStatus("saved");
     } catch(e){
+      if(navigator.onLine===false){ setSaveStatus("local"); setSaveError(""); return; }
       setSaveStatus("error");
-      setSaveError(navigator.onLine===false ? "インターネットに接続していません。" : (e&&e.message?e.message:"原因が分かりませんでした。"));
+      setSaveError(e&&e.message?e.message:"原因が分かりませんでした。");
     }
-  },[]);
+  };
 
   useEffect(()=>{
-    if(!openData||!openId||!session) return;
-    const t=setTimeout(()=>pushSave(openData,openId),1500);
+    if(!openData||!openId||!session||openId==="demo") return;
+    if(skipSaveRef.current){ skipSaveRef.current=false; return; }
+    const uid=session.user.id, id=openId, payload=openData;
+    pendingRef.current={ id, payload };
+    // まずこの端末に保存（電波がなくても消えない）
+    localPutStory(uid,id,{ data:payload,title:payload.storyTitle,localAt:Date.now(),baseServerAt:baseAtRef.current[id]??null,dirty:true });
+    writeStoryFile(uid,id,payload,(stories||[]).map(x=>x.id===id?payload.storyTitle:x.title));
+    if(navigator.onLine===false){ setSaveStatus("local"); return; }
+    const t=setTimeout(()=>pushSave(payload,id),1500);
     return ()=>clearTimeout(t);
   },[openData]);
+
+  // 電波が戻ったら、たまっている分を送る
+  useEffect(()=>{
+    if(!online||!session) return;
+    const p=pendingRef.current;
+    if(p&&p.id===openId) pushSave(p.payload,p.id);
+    syncAllDirty(session.user.id, openId);
+  },[online]);
 
   const saveMeta=useCallback(async(patch)=>{ if(!session) return; await db.from("user_meta").update({...patch,updated_at:new Date().toISOString()}).eq("user_id",session.user.id); },[session]);
 
@@ -2772,15 +2977,39 @@ function App() {
   const openStory=async(id,sec,chId)=>{
     setScreen("editor"); setOpenId(id); setOpenData(null); setLoadError("");
     setSection(sec||null); setCharRoute(chId||null);
+    const uid=session.user.id;
+    const local=await localGetStory(uid,id);
+    let row=null;
     try {
-      const { data:row, error } = await db.from("stories").select("data").eq("id",id).is("deleted_at",null).single();
+      const { data, error } = await db.from("stories").select("title,data,updated_at").eq("id",id).is("deleted_at",null).single();
       if(error) throw error;
-      setOpenData(norm(row?row.data:{}));
+      row=data;
     } catch(e){
-      setLoadError(navigator.onLine===false ? "インターネットに接続していません。電波の届く場所でもう一度お試しください。" : (e&&e.message?e.message:"作品を読み込めませんでした。"));
+      if(local){ baseAtRef.current[id]=local.baseServerAt||null; skipSaveRef.current=true; setOpenData(norm(local.data)); setSaveStatus(local.dirty?"local":"saved"); return; }
+      setLoadError(navigator.onLine===false ? "インターネットに接続していません。この作品はまだこの端末に保存されていないため、電波の届く場所で一度開いてください。" : (e&&e.message?e.message:"作品を読み込めませんでした。"));
+      return;
     }
+    if(local&&local.dirty){
+      const serverAt=Date.parse(row.updated_at), baseAt=local.baseServerAt?Date.parse(local.baseServerAt):null;
+      const serverChanged = baseAt!==null && serverAt!==baseAt;
+      if(serverChanged && serverAt>local.localAt){
+        await backupToTrash(uid,local.title,local.data,"この端末");
+        setSyncNotice("オフライン中に書いた内容より、別の端末で保存された内容の方が新しかったため、そちらを開きました。オフライン中の内容は「ゴミ箱」に控えとして入っています。");
+      } else {
+        if(serverChanged){ await backupToTrash(uid,row.title,row.data,"別の端末"); setSyncNotice("別の端末で保存された内容と重なりました。新しい方（この端末で書いた内容）を残し、別の端末の内容は「ゴミ箱」に控えとして入れました。"); }
+        baseAtRef.current[id]=row.updated_at;
+        setOpenData(norm(local.data));   // 端末の内容を開いて、そのままサーバーへ送る
+        return;
+      }
+    }
+    baseAtRef.current[id]=row.updated_at;
+    await localPutStory(uid,id,{ data:row.data,title:row.title,localAt:Date.now(),baseServerAt:row.updated_at,dirty:false });
+    writeStoryFile(uid,id,row.data,(stories||[]).map(x=>x.title));
+    skipSaveRef.current=true;
+    setSaveStatus("saved");
+    setOpenData(norm(row?row.data:{}));
   };
-  const backToList=()=>{ setScreen("list"); setOpenId(null); setOpenData(null); setSection(null); setCharRoute(null); };
+  const backToList=()=>{ const p=pendingRef.current; if(p&&session) pushSave(p.payload,p.id); setScreen("list"); setOpenId(null); setOpenData(null); setSection(null); setCharRoute(null); };
 
   // ---- デモモード：通信は一切せず、この端末の中だけで動く ----
   const startDemo=()=>{ const d=buildSample(); setDemoData(d); setOpenData(d); setDemo(true); setOpenId("demo"); setScreen("editor"); };
@@ -2791,11 +3020,17 @@ function App() {
       okLabel:"終了する", run:()=>{ setDemo(false); setDemoData(null); setOpenData(null); setOpenId(null); setScreen("list"); } });
   };
 
-  const createStory=async()=>{
-    const d=norm({}); d.storyTitle="新しい作品";
+  // 新しい作品を作る（from があればその内容で。ファイルからの読み込みにも使う）
+  const createStory=async(from)=>{
+    if(navigator.onLine===false){ setSyncNotice("オフラインのあいだは新しい作品を作れません。電波の届く場所でもう一度お試しください。"); return; }
+    let d;
+    if(from&&typeof from==="object"){ d=norm(from); d.storyTitle=from.storyTitle||"読み込んだ作品"; }
+    else { d=norm({}); d.storyTitle="新しい作品"; }
     const maxOrder=stories.reduce((m,s)=>Math.max(m,s.sort_order),-1);
-    const { data:ins } = await db.from("stories").insert({user_id:session.user.id,title:d.storyTitle,data:d,sort_order:maxOrder+1,summary:mkSummary(d)}).select("id,title,sort_order,updated_at,summary").single();
-    if(ins){ setStories([...stories,{id:ins.id,title:ins.title,sort_order:ins.sort_order,updated_at:ins.updated_at,summary:ins.summary}]); setScreen("editor"); setOpenId(ins.id); setOpenData(d); setSection(null); setCharRoute(null); }
+    const { data:ins, error } = await db.from("stories").insert({user_id:session.user.id,title:d.storyTitle,data:d,sort_order:maxOrder+1,summary:mkSummary(d)}).select("id,title,sort_order,updated_at,summary").single();
+    if(error||!ins){ setSyncNotice("作品を作れませんでした。時間をおいてもう一度お試しください。"+(error?"\n（"+error.message+"）":"")); return; }
+    baseAtRef.current[ins.id]=ins.updated_at;
+    setStories([...stories,{id:ins.id,title:ins.title,sort_order:ins.sort_order,updated_at:ins.updated_at,summary:ins.summary}]); setScreen("editor"); setOpenId(ins.id); setOpenData(d); setSection(null); setCharRoute(null);
   };
   const duplicateStory=async(id)=>{
     const { data:src } = await db.from("stories").select("data,title").eq("id",id).single();
@@ -2812,6 +3047,8 @@ function App() {
     if(error) return "削除できませんでした。\n"+error.message;
     if(!removed||removed.length===0) return "ゴミ箱に移せませんでした。\nこの作品を削除する権限がありません。別のアカウントで作られた作品か、ログインの有効期限が切れている可能性があります。一度ログアウトして入り直してください。";
     setStories(stories.filter(s=>s.id!==id));
+    localDelStory(session.user.id,id);
+    deleteStoryFile(session.user.id,id);
     if(openId===id){ backToList(); }
     return null;
   };
@@ -2868,15 +3105,20 @@ function App() {
   return (
     <div style={{ height:"100%",maxWidth:isDesktop?"none":480,margin:"0 auto",background:C.bg,position:"relative",overflow:"hidden" }}>
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
-      {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={createStory} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>setScreen("settings")} onOpenIdeas={()=>setScreen("ideas")}/>}
+      {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>setScreen("settings")} onOpenIdeas={()=>setScreen("ideas")}/>}
       {screen==="editor"&&(openData
         ? <StoryEditor data={openData} setData={setOpenData} onBack={backToList} saveStatus={saveStatus} saveError={saveError} online={online} onRetrySave={()=>pushSave(openData,openId)} route={{section,charId:charRoute}} onNavigate={(sec,chId)=>{ setSection(sec); setCharRoute(chId); }}/>
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} email={session.user.email} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
+      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
       {screen==="trash"&&<TrashScreen onBack={()=>setScreen("settings")} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
+      {syncNotice&&(
+        <Modal compact title="お知らせ" onClose={()=>setSyncNotice(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setSyncNotice(null)}>OK</Btn></>}>
+          <div style={{ fontSize:13,color:C.text,lineHeight:1.95,whiteSpace:"pre-line" }}>{syncNotice}</div>
+        </Modal>
+      )}
     </div>
   );
 }
