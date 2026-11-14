@@ -2194,7 +2194,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "count": return <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",paddingTop:12 }}><WordCountView data={data}/></div>;
       case "characters": return charListEl;
       case "graph": return <RelationGraph data={data} onOpenChar={ch=>openChar(ch.id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})} onMoveNodes={moveNodes} onResetNodes={resetNodes}/>;
-      case "family": return <FamilyTreeView data={data} isPremium={isPremium} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
+      case "family": return <FamilyTreeView data={data} isPremium={true} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
       case "timeline": return <TimelineView data={data}/>;
       case "scenes": return simpleList("scenes",{modal:"scene",renderName:s=>s.title||"（無題）",renderSubtitle:s=>{const ch=data.chapters.find(c=>c.id===s.relatedChapterId);return[dateLabel(data,s.startDate),ch?ch.title:null,s.script?`${countChars(s.script)}字`:null].filter(Boolean).join(" · ")||null;}});
       case "groups": return simpleList("groups",{modal:"group",renderName:g=>g.name||"（無名）",renderSubtitle:g=>`${g.relatedCharacters.length}名が所属`});
