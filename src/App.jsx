@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.10.1";
+const APP_VERSION = "0.11.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -252,6 +252,8 @@ const norm = (d) => {
     graphPositions:d.graphPositions||{},
     nowDate:d.nowDate||"",
     calendar:normCal(d.calendar),
+    family:Array.isArray(d.family)?d.family.filter(l=>l&&l.a&&l.b&&["parent","spouse","sibling"].includes(l.type)):[],
+    familySort:(d.familySort&&typeof d.familySort==="object"&&!Array.isArray(d.familySort))?d.familySort:{},
     relationTypes:d.relationTypes||[{id:uid(),name:"親子",color:"#E8916E"},{id:uid(),name:"友人",color:"#4CAF82"},{id:uid(),name:"恋愛",color:"#D9618A"},{id:uid(),name:"敵対",color:"#C0392B"}],
   };
 };
@@ -384,6 +386,8 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     monitor:<><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></>,
     palette:<><path d="M12 3a9 9 0 100 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 005-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10.5" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/></>,
     help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 015 .9c0 1.7-2.5 2.2-2.5 3.8"/><path d="M12 17.2v.1"/></>,
+    tree:<><circle cx="12" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M12 7.2V12M6 16.8V12h12v4.8"/></>,
+    minus:<><path d="M5 12h14"/></>,
     sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
     grid:<><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
     filter:<><path d="M4 5.5h16l-6.2 7.3V19l-3.6 1.8v-8L4 5.5z"/></>,
@@ -1898,7 +1902,7 @@ const buildSample = () => {
 };
 
 // ===================== STORY EDITOR =====================
-function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onRetrySave, route, onNavigate }) {
+function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onRetrySave, route, onNavigate, isPremium }) {
   const [activeTab,setActiveTab]=useState("write");
   const [sub,setSub]=useState({write:"chapters",world:"groups"});
   const [deskView,setDeskView]=useState(null);
@@ -1934,7 +1938,8 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const importRef=useRef();
   const upd=useCallback(fn=>setData(p=>fn(p)),[setData]);
   const upsert=useCallback((key,item)=>upd(p=>{const l=[...p[key]];const i=l.findIndex(x=>x.id===item.id);if(i>=0)l[i]=item;else l.push(item);return{...p,[key]:l};}),[upd]);
-  const del=useCallback((key,id)=>{upd(p=>({...p,[key]:p[key].filter(x=>x.id!==id)}));setModal(null);if(key==="characters")setCharViewId(null);},[upd]);
+  const setFamily=useCallback((fn,sortFn)=>upd(p=>({...p,family:fn?fn(p.family||[]):(p.family||[]),familySort:sortFn?sortFn(p.familySort||{}):(p.familySort||{})})),[upd]);
+  const del=useCallback((key,id)=>{upd(p=>{ const n={...p,[key]:p[key].filter(x=>x.id!==id)}; if(key==="characters"&&p.family){ n.family=p.family.filter(l=>l.a!==id&&l.b!==id); } return n; });setModal(null);if(key==="characters")setCharViewId(null);},[upd]);
   const moveEntity=useCallback((key,idx,dir)=>upd(p=>{const items=[...p[key]];const ni=idx+dir;if(ni<0||ni>=items.length) return p;[items[idx],items[ni]]=[items[ni],items[idx]];return{...p,[key]:items};}),[upd]);
   const setLayout=(v)=>{ setCharLayout(v); localStorage.setItem("tl_charLayout",v); };
 
@@ -2037,6 +2042,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     locations:   { label:"場所",       icon:"pin",    color:"#4CAF82" },
     terms:       { label:"用語",       icon:"term",   color:"#C0392B" },
     graph:       { label:"相関図",     icon:"share" },
+    family:      { label:"家系図",     icon:"tree" },
     timeline:    { label:"年表",       icon:"calendar" },
     storySettings:{label:"作品の設定", icon:"settings" },
     calendar:    { label:"暦と元号",   icon:"calendar" },
@@ -2049,12 +2055,12 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     { key:"write", label:"執筆",   icon:"pencil", subs:["chapters","scenes"] },
     { key:"cast",  label:"人物",   icon:"person", view:"characters" },
     { key:"world", label:"世界観", icon:"world",  subs:["groups","locations","terms"] },
-    { key:"link",  label:"関係",   icon:"share",  view:"graph" },
+    { key:"link",  label:"関係",   icon:"share",  subs:["graph","family"] },
     { key:"time",  label:"年表",   icon:"calendar", view:"timeline" },
   ];
   const MORE = ["count","calendar","genders","parameters","abilityParams","relationTypes","storySettings"];
   // 画面を切り替えてもスクロール位置が残るよう、タブの中身は常に生かしておく
-  const LIVE_KEYS = ["chapters","scenes","characters","groups","locations","terms","graph","timeline"];
+  const LIVE_KEYS = ["chapters","scenes","characters","groups","locations","terms","graph","family","timeline"];
 
   const layoutToggle=(
     <div style={{ display:"flex",background:C.bg,borderRadius:9,padding:2 }}>
@@ -2188,6 +2194,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "count": return <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",paddingTop:12 }}><WordCountView data={data}/></div>;
       case "characters": return charListEl;
       case "graph": return <RelationGraph data={data} onOpenChar={ch=>openChar(ch.id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})} onMoveNodes={moveNodes} onResetNodes={resetNodes}/>;
+      case "family": return <FamilyTreeView data={data} isPremium={isPremium} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
       case "timeline": return <TimelineView data={data}/>;
       case "scenes": return simpleList("scenes",{modal:"scene",renderName:s=>s.title||"（無題）",renderSubtitle:s=>{const ch=data.chapters.find(c=>c.id===s.relatedChapterId);return[dateLabel(data,s.startDate),ch?ch.title:null,s.script?`${countChars(s.script)}字`:null].filter(Boolean).join(" · ")||null;}});
       case "groups": return simpleList("groups",{modal:"group",renderName:g=>g.name||"（無名）",renderSubtitle:g=>`${g.relatedCharacters.length}名が所属`});
@@ -2254,7 +2261,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     </button>
   ); };
   const paneWrap=(node,max)=>(<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",maxWidth:max||860,width:"100%",margin:"0 auto" }}>{node}</div>);
-  const deskMax=(k)=>k==="graph"?640:(k==="timeline"||k==="count")?780:900;
+  const deskMax=(k)=>k==="graph"?640:k==="family"?1200:(k==="timeline"||k==="count")?780:900;
   const renderDesktopMain=()=>(<>
     {!deskView&&(
       <div style={{ flex:1,overflowY:"auto",padding:"34px 28px" }}>
@@ -2315,7 +2322,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
           {sideLabel("世界観")}
           {["groups","locations","terms"].map(k=>sideItem(k))}
           {sideLabel("見取り図")}
-          {["graph","timeline"].map(k=>sideItem(k))}
+          {["graph","family","timeline"].map(k=>sideItem(k))}
           {sideLabel("その他")}
           {MORE.map(k=>sideItem(k))}
         </div>
@@ -2555,6 +2562,480 @@ function TrashScreen({ onBack, userId, onRestored }) {
       {confirm&&(<Modal compact title={confirm.mode==="all"?"ゴミ箱を空にする":"完全に削除"} onClose={()=>setConfirm(null)} footer={<><Btn onClick={()=>setConfirm(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="danger" icon="trash" onClick={purge}>完全に削除する</Btn></>}>
         <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.85 }}>{confirm.mode==="all"?`ゴミ箱の${items.length}件の作品を`:`「${confirm.item.title||"（無題）"}」を`}完全に削除します。<b style={{ color:C.text }}>元には戻せません。</b></div>
       </Modal>)}
+    </div>
+  );
+}
+
+// ===================== FAMILY TREE =====================
+// 家系図のつながりは data.family に {id,type,a,b} で持つ。
+//   parent：a が b の親 ／ spouse：a と b が夫婦 ／ sibling：a と b がきょうだい（親が未登録のとき用）
+// きょうだいの並びは data.familySort（{人物ID: 数}）。なければ誕生日 → 登録順
+const famLinks = (data) => {
+  const ids=new Set(data.characters.map(c=>c.id)); const seen=new Set();
+  return (data.family||[]).filter(l=>{
+    if(!l||!ids.has(l.a)||!ids.has(l.b)||l.a===l.b) return false;
+    const k=l.type==="parent"?`p|${l.a}|${l.b}`:`${l.type}|${[l.a,l.b].sort().join("|")}`;
+    if(seen.has(k)) return false; seen.add(k); return true;
+  });
+};
+const famMaps = (links) => {
+  const parents={}, children={}, spouses={}, sibs={};
+  const add=(m,k,v)=>{ (m[k]=m[k]||[]); if(!m[k].includes(v)) m[k].push(v); };
+  links.forEach(l=>{
+    if(l.type==="parent"){ add(parents,l.b,l.a); add(children,l.a,l.b); }
+    else if(l.type==="spouse"){ add(spouses,l.a,l.b); add(spouses,l.b,l.a); }
+    else if(l.type==="sibling"){ add(sibs,l.a,l.b); add(sibs,l.b,l.a); }
+  });
+  return { parents, children, spouses, sibs };
+};
+// 同じ親を持つ人＋明示したきょうだい
+const famSiblingsOf = (m,id) => {
+  const out=new Set(m.sibs[id]||[]);
+  (m.parents[id]||[]).forEach(p=>(m.children[p]||[]).forEach(c=>{ if(c!==id) out.add(c); }));
+  return [...out];
+};
+const famIsAncestor = (m,anc,id) => { // anc は id の祖先か
+  const st=[id], seen=new Set();
+  while(st.length){ const x=st.pop(); if(seen.has(x)) continue; seen.add(x); for(const p of (m.parents[x]||[])){ if(p===anc) return true; st.push(p); } }
+  return false;
+};
+const famSortFn = (data) => {
+  const reg={}; data.characters.forEach((c,i)=>reg[c.id]=i);
+  const fs=data.familySort||{};
+  const bd={}; data.characters.forEach(c=>{ bd[c.id]=dayIndex(data,c.birthday); });
+  return (a,b)=>{
+    const fa=fs[a], fb=fs[b];
+    if(fa!=null&&fb!=null&&fa!==fb) return fa-fb;
+    const ba=bd[a], bb=bd[b];
+    if(ba!=null&&bb!=null&&ba!==bb) return ba-bb;
+    if(ba!=null&&bb==null) return -1; if(bb!=null&&ba==null) return 1;
+    return (reg[a]||0)-(reg[b]||0);
+  };
+};
+
+const FT = { W:92, H:86, GAP:14, UNIT:34, ROW:150, PAD:28 };
+const famLayout = (data) => {
+  const links=famLinks(data);
+  const m=famMaps(links);
+  const ids=[...new Set(links.flatMap(l=>[l.a,l.b]))];
+  if(!ids.length) return { ids, nodes:{}, links, m, width:0, height:0, rows:[] };
+  const cmp=famSortFn(data);
+  // --- 世代：親より1つ下、夫婦・きょうだいは同じ段 ---
+  const gen={}; ids.forEach(i=>gen[i]=0);
+  const N=ids.length;
+  for(let it=0; it<N*4+10; it++){
+    let ch=false;
+    links.forEach(l=>{
+      if(l.type==="parent"){ if(gen[l.b]<gen[l.a]+1&&gen[l.a]+1<=N){ gen[l.b]=gen[l.a]+1; ch=true; } }
+      else { const mx=Math.max(gen[l.a],gen[l.b]); if(gen[l.a]!==mx||gen[l.b]!==mx){ gen[l.a]=gen[l.b]=mx; ch=true; } }
+    });
+    // 親が登録されていない人は、子どものすぐ上の段まで下ろす
+    ids.forEach(i=>{ if((m.parents[i]||[]).length) return; const cs=m.children[i]||[]; if(!cs.length) return; const want=Math.min(...cs.map(c=>gen[c]))-1; if(want>gen[i]){ gen[i]=want; ch=true; } });
+    if(!ch) break;
+  }
+  const g0=Math.min(...ids.map(i=>gen[i])); ids.forEach(i=>gen[i]-=g0);
+  const maxG=Math.max(...ids.map(i=>gen[i]));
+  // つながりのかたまり（家ごと）の番号：横の並びで同じ家をまとめるため
+  const comp={}; let ci=0;
+  const nb=(i)=>[...(m.parents[i]||[]),...(m.children[i]||[]),...(m.spouses[i]||[]),...(m.sibs[i]||[])];
+  [...ids].sort(cmp).forEach(s=>{ if(comp[s]!=null) return; const st=[s]; while(st.length){ const x=st.pop(); if(comp[x]!=null) continue; comp[x]=ci; nb(x).forEach(y=>{ if(comp[y]==null) st.push(y); }); } ci++; });
+  // 明示きょうだいのまとまり
+  const sibComp={}; ids.forEach(s=>{ if(sibComp[s]!=null||!(m.sibs[s]||[]).length) return; const st=[s]; while(st.length){ const x=st.pop(); if(sibComp[x]!=null) continue; sibComp[x]=s; (m.sibs[x]||[]).forEach(y=>st.push(y)); } });
+
+  // --- 段ごとに「まとまり（ユニット）」を作る ---
+  const rows=[];
+  for(let g=0; g<=maxG; g++){
+    const members=ids.filter(i=>gen[i]===g).sort(cmp);
+    const pkey=(i)=>{ const ps=(m.parents[i]||[]).filter(p=>gen[p]<g); return ps.length?"p:"+[...ps].sort().join(","):sibComp[i]!=null?"s:"+sibComp[i]:null; };
+    const groups=new Map(); const loose=[];
+    members.forEach(i=>{ const k=pkey(i); if(k){ if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(i); } else loose.push(i); });
+    const attached=new Set(); const attachTo={};
+    // 親のいない配偶者は、相手の隣に並べる
+    loose.forEach(i=>{ const sp=(m.spouses[i]||[]).filter(s=>gen[s]===g&&!loose.includes(s)); if(sp.length){ const host=sp.sort(cmp)[0]; (attachTo[host]=attachTo[host]||[]).push(i); attached.add(i); } });
+    const units=[];
+    groups.forEach((list,k)=>{
+      const seq=[]; list.sort(cmp).forEach(i=>{ const at=(attachTo[i]||[]).sort(cmp); if(at.length>=2){ seq.push(at[0],i,...at.slice(1)); } else { seq.push(i,...at); } });
+      units.push({ key:k, ids:seq, parents:k.startsWith("p:")?k.slice(2).split(","):[] });
+    });
+    // 残り：親のいない人同士の夫婦はひとまとめ
+    const rest=loose.filter(i=>!attached.has(i)); const used=new Set();
+    rest.forEach(i=>{ if(used.has(i)) return; const grp=[]; const st=[i]; while(st.length){ const x=st.shift(); if(used.has(x)) continue; used.add(x); grp.push(x); (m.spouses[x]||[]).filter(s=>rest.includes(s)&&!used.has(s)).sort(cmp).forEach(s=>st.push(s)); }
+      // 配偶者が2人以上いる人は、その間に置く
+      let seq=grp;
+      if(grp.length>=3){ const sc=(x)=>(m.spouses[x]||[]).filter(y=>grp.includes(y)).length; const hub=[...grp].sort((a,b)=>sc(b)-sc(a)||cmp(a,b))[0]; const sp=(m.spouses[hub]||[]).filter(y=>grp.includes(y)).sort(cmp); if(sp.length>=2){ seq=[sp[0],hub,...sp.slice(1)]; grp.forEach(y=>{ if(!seq.includes(y)) seq.push(y); }); } }
+      units.push({ key:"i:"+i, ids:seq, parents:[] }); });
+    rows.push(units);
+  }
+  // --- 横位置 ---
+  const x={};
+  const unitW=(u)=>u.ids.length*FT.W+(u.ids.length-1)*FT.GAP;
+  const anchorOf=(u)=>{
+    const ps=u.parents.filter(p=>x[p]!=null);
+    if(ps.length) return ps.reduce((s,p)=>s+x[p]+FT.W/2,0)/ps.length;
+    // 親がいなければ、配偶者の親や同じ家の人の位置に寄せる
+    const near=[]; u.ids.forEach(i=>(m.spouses[i]||[]).forEach(s=>{ if(x[s]!=null) near.push(x[s]+FT.W/2); }));
+    if(near.length) return near.reduce((a,b)=>a+b,0)/near.length;
+    return null;
+  };
+  const place=(g,keepPrev)=>{
+    const units=rows[g];
+    units.forEach(u=>{ u.anchor=anchorOf(u); });
+    const c0=(u)=>comp[u.ids[0]];
+    units.sort((a,b)=>{ const ca=c0(a), cb=c0(b); if(ca!==cb) return ca-cb; const aa=a.anchor==null?Infinity:a.anchor, ab=b.anchor==null?Infinity:b.anchor; if(aa!==ab) return aa-ab; return cmp(a.ids[0],b.ids[0]); });
+    let cursor=0; let lastComp=null;
+    units.forEach(u=>{
+      if(lastComp!=null&&c0(u)!==lastComp) cursor+=FT.UNIT;
+      const w=unitW(u);
+      let st=u.anchor!=null?u.anchor-w/2:cursor;
+      if(keepPrev&&u.prev!=null) st=Math.max(st,u.prev);
+      st=Math.max(st,cursor);
+      u.ids.forEach((i,k)=>{ x[i]=st+k*(FT.W+FT.GAP); });
+      u.prev=st; cursor=st+w+FT.UNIT; lastComp=c0(u);
+    });
+  };
+  for(let g=0; g<=maxG; g++) place(g,false);
+  // 親を子どもの真ん中の上に寄せる（右にずらすだけ）
+  for(let g=maxG-1; g>=0; g--){
+    let shift=0;
+    rows[g].forEach(u=>{
+      u.ids.forEach(i=>{ x[i]+=shift; }); u.prev=x[u.ids[0]];
+      const kids=[...new Set(u.ids.flatMap(i=>(m.children[i]||[])))].filter(c=>gen[c]===g+1);
+      if(!kids.length) return;
+      const want=kids.reduce((s,c)=>s+x[c]+FT.W/2,0)/kids.length;
+      const parentsIn=u.ids.filter(i=>(m.children[i]||[]).length);
+      const have=parentsIn.reduce((s,i)=>s+x[i]+FT.W/2,0)/parentsIn.length;
+      if(want>have){ const d=want-have; u.ids.forEach(i=>{ x[i]+=d; }); u.prev=x[u.ids[0]]; shift+=d; }
+    });
+  }
+  for(let g=1; g<=maxG; g++) place(g,true);
+  const minX=Math.min(...ids.map(i=>x[i]));
+  const nodes={};
+  ids.forEach(i=>{ nodes[i]={ x:x[i]-minX+FT.PAD, y:gen[i]*FT.ROW+FT.PAD+14, gen:gen[i] }; });
+  const width=Math.max(...ids.map(i=>nodes[i].x))+FT.W+FT.PAD;
+  const height=(maxG+1)*FT.ROW-(FT.ROW-FT.H)+FT.PAD*2+14;
+  return { ids, nodes, links, m, width, height, rows, gen };
+};
+
+// 関係（相関図）の名前から、家族のつながりを推しはかる
+const famGuessFromRelations = (data) => {
+  const links=famLinks(data);
+  const has=(type,a,b)=>links.some(l=>l.type===type&&((l.a===a&&l.b===b)||(type!=="parent"&&l.a===b&&l.b===a)||(type==="parent"&&l.a===b&&l.b===a)));
+  const kind=(name)=>{
+    if(!name) return null;
+    if(/弟子|師|兄弟子|姉弟子|義兄弟/.test(name)) return null;
+    if(/夫婦|配偶|夫|妻|嫁|婿|結婚|伴侶/.test(name)) return "spouse";
+    if(/兄弟|姉妹|兄妹|姉弟|きょうだい|双子|兄|姉|弟|妹/.test(name)) return "sibling";
+    if(/親子|父|母|親|息子|娘/.test(name)) return "parent";
+    return null;
+  };
+  const out=[]; const seen=new Set();
+  data.characters.forEach(c=>c.relatedCharacters.forEach(r=>{
+    const other=data.characters.find(x=>x.id===r.charId); if(!other) return;
+    const key=[c.id,other.id].sort().join("|"); if(seen.has(key)) return;
+    const back=other.relatedCharacters.find(x=>x.charId===c.id);
+    const tA=data.relationTypes.find(t=>t.id===r.relTypeId), tB=data.relationTypes.find(t=>t.id===(back&&back.relTypeId));
+    const k=kind(tA&&tA.name)||kind(tB&&tB.name); if(!k) return;
+    seen.add(key);
+    let a=c.id, b=other.id, unsure=false;
+    if(k==="parent"){
+      const da=dayIndex(data,c.birthday), db=dayIndex(data,other.birthday);
+      if(da!=null&&db!=null&&da!==db){ if(db<da){ a=other.id; b=c.id; } }
+      else unsure=true;
+    }
+    if(has(k,a,b)) return;
+    out.push({ id:uid(), type:k, a, b, unsure, on:true, label:(tA&&tA.name)||(tB&&tB.name) });
+  }));
+  return out;
+};
+
+const FamAvatar = ({ ch, size=40 }) => ch.image
+  ? <SImg src={ch.image} style={{ width:size,height:size,borderRadius:"50%",objectFit:"cover",display:"block",flexShrink:0 }}/>
+  : <div style={{ width:size,height:size,borderRadius:"50%",background:ch.imageColor||"#8EA3C3",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.42,fontWeight:600,flexShrink:0 }}>{charInitial(ch)}</div>;
+
+function FamilyPersonSheet({ data, id, onClose, onOpenChar, setFamily }) {
+  const ch=data.characters.find(c=>c.id===id);
+  const links=famLinks(data); const m=famMaps(links);
+  const cmp=famSortFn(data);
+  const [err,setErr]=useState("");
+  const [addKind,setAddKind]=useState(null);   // parent | spouse | child | sibling
+  const [pick,setPick]=useState("");
+  const [partner,setPartner]=useState("");
+  if(!ch) return null;
+  const name=(i)=>charName(data.characters.find(c=>c.id===i));
+  const parents=(m.parents[id]||[]).slice().sort(cmp);
+  const spouses=(m.spouses[id]||[]).slice().sort(cmp);
+  const kids=(m.children[id]||[]).slice().sort(cmp);
+  const explicitSibs=(m.sibs[id]||[]);
+  const sibsAll=famSiblingsOf(m,id).sort(cmp);
+  const remove=(pred)=>setFamily(fam=>fam.filter(l=>!pred(l)));
+  const startAdd=(k)=>{ setErr(""); setPick(""); setAddKind(k); setPartner(k==="child"&&spouses.length===1?spouses[0]:""); };
+  const candidates=data.characters.filter(c=>{
+    if(c.id===id) return false;
+    if(addKind==="parent") return !parents.includes(c.id);
+    if(addKind==="spouse") return !spouses.includes(c.id);
+    if(addKind==="child") return !kids.includes(c.id);
+    if(addKind==="sibling") return !sibsAll.includes(c.id);
+    return false;
+  });
+  const commit=()=>{
+    if(!pick) return;
+    if(addKind==="parent"){
+      if(famIsAncestor(m,id,pick)||pick===id){ setErr(`${name(pick)}は${ch?charName(ch):""}の子孫なので、親にはできません。`); return; }
+      setFamily(fam=>[...fam,{ id:uid(),type:"parent",a:pick,b:id }]);
+    } else if(addKind==="child"){
+      if(famIsAncestor(m,pick,id)){ setErr(`${name(pick)}は${charName(ch)}の祖先なので、子にはできません。`); return; }
+      const add=[{ id:uid(),type:"parent",a:id,b:pick }];
+      if(partner&&!(m.parents[pick]||[]).includes(partner)) add.push({ id:uid(),type:"parent",a:partner,b:pick });
+      setFamily(fam=>[...fam,...add]);
+    } else if(addKind==="spouse"){
+      setFamily(fam=>[...fam,{ id:uid(),type:"spouse",a:id,b:pick }]);
+    } else if(addKind==="sibling"){
+      // 自分に親がいれば、相手にも同じ親をつける（同じ親の子として並ぶように）
+      if(parents.length){ setFamily(fam=>[...fam,...parents.filter(p=>!(m.parents[pick]||[]).includes(p)&&!famIsAncestor(m,pick,p)).map(p=>({ id:uid(),type:"parent",a:p,b:pick }))]); }
+      else setFamily(fam=>[...fam,{ id:uid(),type:"sibling",a:id,b:pick }]);
+    }
+    setAddKind(null); setPick("");
+  };
+  const moveKid=(i,dir)=>{
+    const list=kids.slice(); const j=i+dir; if(j<0||j>=list.length) return;
+    [list[i],list[j]]=[list[j],list[i]];
+    setFamily(null,(fs)=>{ const n={...fs}; list.forEach((k,idx)=>{ n[k]=idx; }); return n; });
+  };
+  const Row=({ pid, onRemove, extra })=>{ const p=data.characters.find(c=>c.id===pid); if(!p) return null; return (
+    <div style={{ display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
+      <FamAvatar ch={p} size={28}/>
+      <button onClick={()=>onOpenChar(pid)} style={{ flex:1,minWidth:0,textAlign:"left",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(p)}</button>
+      {extra}
+      {onRemove&&<button onClick={onRemove} aria-label="外す" style={{ background:"none",border:"none",cursor:"pointer",padding:6,display:"flex" }}><Ico n="x" s={14} c={C.hint}/></button>}
+    </div>
+  ); };
+  const Sec=({ title, kind, children, empty })=>(
+    <div style={{ marginBottom:16 }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2 }}>
+        <span style={{ fontSize:11.5,fontWeight:600,color:C.sub }}>{title}</span>
+        <button onClick={()=>startAdd(kind)} style={{ display:"flex",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 2px",fontFamily:"inherit",fontSize:12,color:C.accent }}><Ico n="plus" s={13} c={C.accent}/>追加</button>
+      </div>
+      {children}
+      {empty&&<div style={{ fontSize:11.5,color:C.hint,padding:"6px 0" }}>{empty}</div>}
+      {addKind===kind&&(
+        <div style={{ background:C.bg,borderRadius:10,padding:10,marginTop:6 }}>
+          <select value={pick} onChange={e=>{ setPick(e.target.value); setErr(""); }} style={{ ...IS(),cursor:"pointer",marginBottom:8 }}>
+            <option value="">人物を選ぶ</option>
+            {candidates.map(c=><option key={c.id} value={c.id}>{charName(c)}</option>)}
+          </select>
+          {kind==="child"&&spouses.length>0&&(
+            <select value={partner} onChange={e=>setPartner(e.target.value)} style={{ ...IS(),cursor:"pointer",marginBottom:8 }}>
+              <option value="">もう一人の親：なし</option>
+              {spouses.map(s=><option key={s} value={s}>もう一人の親：{name(s)}</option>)}
+            </select>
+          )}
+          {err&&<div style={{ fontSize:11.5,color:C.danger,marginBottom:8,lineHeight:1.7 }}>{err}</div>}
+          <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
+            <Btn small variant="ghost" onClick={()=>{ setAddKind(null); setErr(""); }}>やめる</Btn>
+            <Btn small variant="primary" onClick={commit}>追加する</Btn>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <Modal compact title={charName(ch)} onClose={onClose} footer={<><Btn small onClick={()=>onOpenChar(id)} icon="person">人物ページを開く</Btn><div style={{ flex:1 }}/><Btn small variant="primary" onClick={onClose}>閉じる</Btn></>}>
+      <Sec title="親" kind="parent" empty={parents.length?null:"まだいません"}>
+        {parents.map(p=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="parent"&&l.a===p&&l.b===id)}/>)}
+      </Sec>
+      <Sec title="配偶者・パートナー" kind="spouse" empty={spouses.length?null:"まだいません"}>
+        {spouses.map(p=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="spouse"&&((l.a===p&&l.b===id)||(l.a===id&&l.b===p)))}/>)}
+      </Sec>
+      <Sec title="子" kind="child" empty={kids.length?null:"まだいません"}>
+        {kids.map((p,i)=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="parent"&&l.a===id&&l.b===p)} extra={kids.length>1&&<div style={{ display:"flex" }}>
+          <button onClick={()=>moveKid(i,-1)} disabled={i===0} aria-label="上へ" style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",padding:5,opacity:i===0?0.25:1,display:"flex" }}><Ico n="chevU" s={14} c={C.sub}/></button>
+          <button onClick={()=>moveKid(i,1)} disabled={i===kids.length-1} aria-label="下へ" style={{ background:"none",border:"none",cursor:i===kids.length-1?"default":"pointer",padding:5,opacity:i===kids.length-1?0.25:1,display:"flex" }}><Ico n="chevD" s={14} c={C.sub}/></button>
+        </div>}/>)}
+        {kids.length>1&&<div style={{ fontSize:10.5,color:C.hint,paddingTop:5 }}>上にいるほど家系図の左に並びます。</div>}
+      </Sec>
+      <Sec title="きょうだい" kind="sibling" empty={sibsAll.length?null:"まだいません"}>
+        {sibsAll.map(p=><Row key={p} pid={p} onRemove={explicitSibs.includes(p)?()=>remove(l=>l.type==="sibling"&&((l.a===p&&l.b===id)||(l.a===id&&l.b===p))):null} extra={!explicitSibs.includes(p)&&<span style={{ fontSize:10.5,color:C.hint,flexShrink:0 }}>同じ親</span>}/>)}
+      </Sec>
+      <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8 }}>家系図のつながりは、相関図の線とは別に保存されます。</div>
+    </Modal>
+  );
+}
+
+function FamilyImportDialog({ data, onClose, onAdd }) {
+  const [items,setItems]=useState(()=>famGuessFromRelations(data));
+  const name=(i)=>charName(data.characters.find(c=>c.id===i));
+  const label=(it)=>it.type==="parent"?`${name(it.a)} は ${name(it.b)} の親`:it.type==="spouse"?`${name(it.a)} と ${name(it.b)} は夫婦`:`${name(it.a)} と ${name(it.b)} はきょうだい`;
+  const upd=(id,f)=>setItems(l=>l.map(x=>x.id===id?f(x):x));
+  const n=items.filter(x=>x.on).length;
+  return (
+    <Modal compact title="関係から読み込む" onClose={onClose} footer={<><Btn small variant="ghost" onClick={onClose}>やめる</Btn><div style={{ flex:1 }}/>{items.length>0&&<Btn small variant="primary" onClick={()=>{ onAdd(items.filter(x=>x.on).map(({id,type,a,b})=>({id,type,a,b}))); onClose(); }}>{n}件を追加</Btn>}</>}>
+      {items.length===0
+        ? <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.9 }}>読み込めるつながりが見つかりませんでした。<br/><span style={{ fontSize:11.5,color:C.hint }}>関係の種類の名前に「親子」「夫婦」「兄弟」「姉妹」などが入っているつながりを読み込みます。</span></div>
+        : <>
+          <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:10 }}>相関図の関係から、家族のつながりを見つけました。追加するものにチェックを入れてください。親子の向きは誕生日から決めています。違っていたら「⇅」で入れ替えてください。</div>
+          {items.map(it=>(
+            <div key={it.id} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
+              <button onClick={()=>upd(it.id,x=>({...x,on:!x.on}))} aria-label="選ぶ" style={{ width:22,height:22,borderRadius:6,border:`1.5px solid ${it.on?C.accent:C.border}`,background:it.on?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0 }}>{it.on&&<Ico n="check" s={13} c={C.accentFg}/>}</button>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ fontSize:12.5,color:C.text,lineHeight:1.6 }}>{label(it)}</div>
+                <div style={{ fontSize:10.5,color:it.unsure?C.danger:C.hint }}>関係：{it.label}{it.unsure?"　誕生日がないため、向きを確認してください":""}</div>
+              </div>
+              {it.type==="parent"&&<button onClick={()=>upd(it.id,x=>({...x,a:x.b,b:x.a,unsure:false}))} style={{ border:`0.5px solid ${C.border}`,background:C.bg,borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13,color:C.sub,flexShrink:0 }}>⇅</button>}
+            </div>
+          ))}
+        </>}
+    </Modal>
+  );
+}
+
+function FamilyTreeView({ data, isPremium, onOpenChar, setFamily }) {
+  const [sel,setSel]=useState(null);
+  const [importOpen,setImportOpen]=useState(false);
+  const [addOpen,setAddOpen]=useState(false);
+  const [scale,setScale]=useState(null);
+  const boxRef=useRef(null);
+  const pinch=useRef(null);
+  const L=useMemo(()=>famLayout(data),[data.family,data.familySort,data.characters,data.calendar]);
+  // 最初は横幅に収まる大きさで表示
+  useEffect(()=>{
+    if(scale!=null||!L.width||!boxRef.current) return;
+    const w=boxRef.current.clientWidth-8;
+    setScale(Math.max(0.45,Math.min(1,w/L.width)));
+  },[L.width,scale]);
+  const sc=scale||1;
+  const setSc=(v)=>setScale(Math.max(0.35,Math.min(1.8,Math.round(v*100)/100)));
+  // 2本指でつまんで拡大・縮小
+  useEffect(()=>{
+    const el=boxRef.current; if(!el) return;
+    const dist=(t)=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+    const ts=(e)=>{ if(e.touches.length===2){ pinch.current={ d:dist(e.touches), s:sc }; } };
+    const tm=(e)=>{ if(e.touches.length===2&&pinch.current){ e.preventDefault(); setSc(pinch.current.s*dist(e.touches)/pinch.current.d); } };
+    const te=()=>{ pinch.current=null; };
+    const wh=(e)=>{ if(e.ctrlKey){ e.preventDefault(); setSc(sc*(e.deltaY<0?1.08:0.92)); } };
+    el.addEventListener("touchstart",ts,{passive:true}); el.addEventListener("touchmove",tm,{passive:false}); el.addEventListener("touchend",te); el.addEventListener("wheel",wh,{passive:false});
+    return ()=>{ el.removeEventListener("touchstart",ts); el.removeEventListener("touchmove",tm); el.removeEventListener("touchend",te); el.removeEventListener("wheel",wh); };
+  });
+
+  if(!isPremium) return (
+    <div style={{ flex:1,overflowY:"auto",padding:"40px 22px",textAlign:"center" }}>
+      <div style={{ width:74,height:74,borderRadius:24,background:C.tag,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px" }}><Ico n="tree" s={32} c={C.hint} sw={1.3}/></div>
+      <div style={{ fontFamily:C.display,fontSize:17,color:C.text,marginBottom:8 }}>家系図</div>
+      <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginBottom:14 }}>親・子・夫婦・きょうだいを登録すると、<br/>世代ごとに並んだ家系図が自動で描かれます。</div>
+      <div style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,background:C.tag,fontSize:11.5,color:C.tagTxt }}><Ico n="lock" s={12} c={C.tagTxt}/>プレミアム機能（準備中）</div>
+    </div>
+  );
+
+  const byId={}; data.characters.forEach(c=>byId[c.id]=c);
+  const notIn=data.characters.filter(c=>!L.nodes[c.id]);
+  const header=(
+    <div style={{ display:"flex",alignItems:"center",gap:6,padding:"10px 12px",flexShrink:0,flexWrap:"wrap" }}>
+      <span style={{ fontFamily:C.display,fontSize:15,color:C.text,marginRight:"auto" }}>家系図</span>
+      <Btn small variant="ghost" icon="download" onClick={()=>setImportOpen(true)}>関係から読み込む</Btn>
+      <Btn small variant="primary" icon="plus" onClick={()=>setAddOpen(true)}>人物を追加</Btn>
+    </div>
+  );
+  const addDialog=addOpen&&(
+    <Modal compact title="家系図に人物を追加" onClose={()=>setAddOpen(false)} footer={<><div style={{ flex:1 }}/><Btn small onClick={()=>setAddOpen(false)}>閉じる</Btn></>}>
+      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:8 }}>人物を選ぶと、その人の親・子・配偶者・きょうだいを登録できます。</div>
+      {data.characters.length===0&&<div style={{ fontSize:12.5,color:C.sub }}>まず「人物」で登場人物を登録してください。</div>}
+      {[...notIn,...data.characters.filter(c=>L.nodes[c.id])].map(c=>(
+        <button key={c.id} onClick={()=>{ setAddOpen(false); setSel(c.id); }} style={{ display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 2px",background:"none",border:"none",borderBottom:`0.5px solid ${C.borderL}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
+          <FamAvatar ch={c} size={28}/><span style={{ flex:1,fontSize:13,color:C.text }}>{charName(c)}</span>
+          {L.nodes[c.id]&&<span style={{ fontSize:10.5,color:C.hint }}>家系図にいます</span>}
+        </button>
+      ))}
+    </Modal>
+  );
+  const dialogs=(<>
+    {addDialog}
+    {importOpen&&<FamilyImportDialog data={data} onClose={()=>setImportOpen(false)} onAdd={list=>setFamily(fam=>[...fam,...list])}/>}
+    {sel&&<FamilyPersonSheet data={data} id={sel} onClose={()=>setSel(null)} onOpenChar={id=>{ setSel(null); onOpenChar(id); }} setFamily={setFamily}/>}
+  </>);
+
+  if(!L.ids.length) return (
+    <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
+      {header}
+      <div style={{ flex:1,overflowY:"auto",padding:"30px 22px",textAlign:"center" }}>
+        <div style={{ width:74,height:74,borderRadius:24,background:C.tag,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px" }}><Ico n="tree" s={32} c={C.hint} sw={1.3}/></div>
+        <div style={{ fontFamily:C.display,fontSize:16,color:C.text,marginBottom:8 }}>家系図はまだありません</div>
+        <div style={{ fontSize:12,color:C.hint,lineHeight:1.9 }}>「人物を追加」から、親・子・夫婦・きょうだいを登録してください。<br/>相関図に「親子」「兄弟」などの関係があれば、<br/>「関係から読み込む」でまとめて取り込めます。</div>
+      </div>
+      {dialogs}
+    </div>
+  );
+
+  // --- 線 ---
+  const N=L.nodes, W=FT.W, H=FT.H, AV=44;
+  const cx=(i)=>N[i].x+W/2;
+  const lineC=C.sub, spC=C.accent;
+  const paths=[];
+  // 夫婦
+  L.links.filter(l=>l.type==="spouse").forEach(l=>{
+    const a=N[l.a], b=N[l.b]; if(!a||!b) return;
+    const [p,q]=a.x<=b.x?[a,b]:[b,a];
+    const y=p.y+AV/2+2;
+    if(p.gen===q.gen){
+      const between=L.ids.some(i=>N[i].gen===p.gen&&N[i].x>p.x&&N[i].x<q.x);
+      if(!between){ paths.push(<path key={"s"+l.id} d={`M${p.x+W/2+AV/2+2},${y-2.5}H${q.x+W/2-AV/2-2}M${p.x+W/2+AV/2+2},${y+2.5}H${q.x+W/2-AV/2-2}`} stroke={spC} strokeWidth="1.4" fill="none"/>); }
+      else { const top=p.y-12; paths.push(<path key={"s"+l.id} d={`M${p.x+W/2},${p.y}V${top}H${q.x+W/2}V${q.y}`} stroke={spC} strokeWidth="1.3" strokeDasharray="4 3" fill="none"/>); }
+    } else paths.push(<line key={"s"+l.id} x1={cx(l.a)} y1={a.y+AV/2} x2={cx(l.b)} y2={b.y+AV/2} stroke={spC} strokeWidth="1.3" strokeDasharray="4 3"/>);
+  });
+  // 親子：同じ親の組の子どもを1本の横線から枝分かれさせる
+  const sets=new Map();
+  L.ids.forEach(c=>{ const ps=(L.m.parents[c]||[]).filter(p=>N[p]); if(!ps.length) return; const k=[...ps].sort().join(","); if(!sets.has(k)) sets.set(k,[]); sets.get(k).push(c); });
+  const rowCount={};
+  sets.forEach((kids,k)=>{
+    const ps=k.split(",");
+    const childGen=Math.min(...kids.map(c=>N[c].gen));
+    const idx=(rowCount[childGen]=(rowCount[childGen]||0)+1)-1;
+    const childTop=Math.min(...kids.map(c=>N[c].y));
+    const barY=childTop-22-(idx%3)*7;
+    let ox, oy;
+    const isCouple=ps.length===2&&N[ps[0]].gen===N[ps[1]].gen&&(L.m.spouses[ps[0]]||[]).includes(ps[1])
+      &&!L.ids.some(i=>N[i].gen===N[ps[0]].gen&&N[i].x>Math.min(N[ps[0]].x,N[ps[1]].x)&&N[i].x<Math.max(N[ps[0]].x,N[ps[1]].x));
+    if(isCouple){ ox=(cx(ps[0])+cx(ps[1]))/2; oy=N[ps[0]].y+AV/2+2; }
+    else { ox=ps.reduce((s,p)=>s+cx(p),0)/ps.length; oy=Math.max(...ps.map(p=>N[p].y))+H-4; }
+    if(!isCouple&&ps.length>1) ps.forEach(p=>paths.push(<path key={`pp${k}${p}`} d={`M${cx(p)},${N[p].y+H-4}V${oy+6}H${ox}`} stroke={lineC} strokeWidth="1.2" fill="none"/>));
+    const xs=kids.map(cx);
+    const x1=Math.min(ox,...xs), x2=Math.max(ox,...xs);
+    let d=`M${ox},${oy}V${barY}M${x1},${barY}H${x2}`;
+    kids.forEach(c=>{ d+=`M${cx(c)},${barY}V${N[c].y-2}`; });
+    paths.push(<path key={"p"+k} d={d} stroke={lineC} strokeWidth="1.3" fill="none"/>);
+  });
+  // 親のいないきょうだい：上をつなぐかぎ線
+  const sg=new Map();
+  const sibRoot={}; L.ids.forEach(s=>{ if(sibRoot[s]||!(L.m.sibs[s]||[]).length) return; const st=[s]; while(st.length){ const x=st.pop(); if(sibRoot[x]) continue; sibRoot[x]=s; (L.m.sibs[x]||[]).forEach(y=>st.push(y)); } });
+  Object.keys(sibRoot).forEach(i=>{ if((L.m.parents[i]||[]).some(p=>N[p])) return; const r=sibRoot[i]; if(!sg.has(r)) sg.set(r,[]); sg.get(r).push(i); });
+  sg.forEach((list,r)=>{
+    if(list.length<2) return;
+    const y=Math.min(...list.map(i=>N[i].y))-14;
+    const xs=list.map(cx); let d=`M${Math.min(...xs)},${y}H${Math.max(...xs)}`;
+    list.forEach(i=>{ d+=`M${cx(i)},${y}V${N[i].y-2}`; });
+    paths.push(<path key={"b"+r} d={d} stroke={lineC} strokeWidth="1.2" strokeDasharray="5 3" fill="none"/>);
+  });
+
+  return (
+    <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",position:"relative" }}>
+      {header}
+      <div ref={boxRef} style={{ flex:1,overflow:"auto",margin:"0 12px 12px",background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:14,WebkitOverflowScrolling:"touch",touchAction:"pan-x pan-y" }}>
+        <div style={{ width:L.width*sc,height:L.height*sc,position:"relative" }}>
+          <div style={{ width:L.width,height:L.height,transform:`scale(${sc})`,transformOrigin:"0 0",position:"absolute",left:0,top:0 }}>
+            <svg width={L.width} height={L.height} style={{ position:"absolute",left:0,top:0,overflow:"visible" }}>{paths}</svg>
+            {L.ids.map(i=>{ const c=byId[i]; const n=N[i]; return (
+              <button key={i} onClick={()=>setSel(i)} style={{ position:"absolute",left:n.x,top:n.y,width:W,height:H,display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit" }}>
+                <div style={{ borderRadius:"50%",boxShadow:`0 0 0 2px ${C.surface}, 0 0 0 3px ${c.imageColor||C.border}` }}><FamAvatar ch={c} size={AV}/></div>
+                <span style={{ fontSize:11,lineHeight:1.35,color:C.text,background:C.surface,padding:"0 3px",borderRadius:4,maxWidth:W,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",wordBreak:"break-all",textAlign:"center" }}>{charName(c)}</span>
+              </button>
+            ); })}
+          </div>
+        </div>
+      </div>
+      <div style={{ position:"absolute",right:22,bottom:22,display:"flex",flexDirection:"column",gap:6 }}>
+        {[["plus",()=>setSc(sc*1.2)],["minus",()=>setSc(sc/1.2)]].map(([ic,fn])=>(
+          <button key={ic} onClick={fn} aria-label={ic==="plus"?"拡大":"縮小"} style={{ width:38,height:38,borderRadius:19,border:`0.5px solid ${C.border}`,background:C.surface,boxShadow:"0 2px 8px rgba(0,0,0,0.12)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n={ic} s={17} c={C.sub}/></button>
+        ))}
+      </div>
+      {dialogs}
     </div>
   );
 }
@@ -3258,7 +3739,7 @@ function App() {
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
       {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>{ setSection(null); setScreen("settings"); }} onOpenIdeas={()=>setScreen("ideas")}/>}
       {screen==="editor"&&(openData
-        ? <StoryEditor data={openData} setData={setOpenData} onBack={backToList} saveStatus={saveStatus} saveError={saveError} online={online} onRetrySave={()=>pushSave(openData,openId)} route={{section,charId:charRoute}} onNavigate={(sec,chId)=>{ setSection(sec); setCharRoute(chId); }}/>
+        ? <StoryEditor data={openData} setData={setOpenData} onBack={backToList} saveStatus={saveStatus} saveError={saveError} online={online} onRetrySave={()=>pushSave(openData,openId)} route={{section,charId:charRoute}} onNavigate={(sec,chId)=>{ setSection(sec); setCharRoute(chId); }} isPremium={isPremium}/>
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
