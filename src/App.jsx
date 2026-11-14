@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.0";
+const APP_VERSION = "0.14.1";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -3314,11 +3314,21 @@ function FamilyTreeView({ data, isPremium, onOpenChar, setFamily }) {
     if(isCouple){ ox=(cx(ps[0])+cx(ps[1]))/2; oy=N[ps[0]].y+AV/2+2; }
     else { ox=ps.reduce((s,p)=>s+cx(p),0)/ps.length; oy=Math.max(...ps.map(p=>N[p].y))+H-4; }
     if(!isCouple&&ps.length>1) ps.forEach(p=>paths.push(<path key={`pp${k}${p}`} d={`M${cx(p)},${N[p].y+H-4}V${oy+6}H${ox}`} stroke={lineC} strokeWidth="1.2" fill="none"/>));
-    const xs=kids.map(cx);
+    // 同じ誕生日のきょうだい（双子・三つ子）は、横線の1点から斜めに枝分かれさせる
+    const byBd=new Map();
+    kids.forEach(c=>{ const bd=(byId[c]&&byId[c].birthday)||""; const key=bd?"b:"+bd:"i:"+c; if(!byBd.has(key)) byBd.set(key,[]); byBd.get(key).push(c); });
+    const drops=[...byBd.values()].map(g=>({ g, x:g.reduce((s,c)=>s+cx(c),0)/g.length }));
+    const xs=drops.map(dp=>dp.x);
     const x1=Math.min(ox,...xs), x2=Math.max(ox,...xs);
-    let d=`M${ox},${oy}V${barY}M${x1},${barY}H${x2}`;
-    kids.forEach(c=>{ d+=`M${cx(c)},${barY}V${N[c].y-2}`; });
-    paths.push(<path key={"p"+k} d={d} stroke={lineC} strokeWidth="1.3" fill="none"/>);
+    let d=`M${ox},${oy}V${barY}M${x1},${barY}H${x2}`; const labels=[];
+    drops.forEach(dp=>{
+      if(dp.g.length===1){ const c=dp.g[0]; d+=`M${cx(c)},${barY}V${N[c].y-2}`; return; }
+      dp.g.forEach(c=>{ d+=`M${dp.x},${barY}L${cx(c)},${N[c].y-2}`; });
+      const ty=(barY+Math.min(...dp.g.map(c=>N[c].y)))/2+4;
+      const lab=["","","双子","三つ子","四つ子","五つ子"][dp.g.length]||`${dp.g.length}つ子`;
+      labels.push(<text key={`tw${k}${dp.x}`} x={dp.x} y={ty} textAnchor="middle" fontSize="10" fill={C.sub} style={{ paintOrder:"stroke",stroke:C.surface,strokeWidth:4 }}>{lab}</text>);
+    });
+    paths.push(<path key={"p"+k} d={d} stroke={lineC} strokeWidth="1.3" fill="none"/>,...labels);
   });
   // 親のいないきょうだい：上をつなぐかぎ線
   const sg=new Map();
