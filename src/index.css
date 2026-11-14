@@ -1,7 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; width: 100%; }
     html { overflow-x: hidden; }
-    body { background: var(--bg,#F8F9FA); font-family: var(--font, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif); -webkit-tap-highlight-color: transparent; overflow-x: hidden; overflow-y: hidden; width: 100%; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overscroll-behavior: none; }
+    body { background: var(--bg,#F8F9FA); font-family: var(--font, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif); -webkit-tap-highlight-color: transparent; overflow-x: hidden; overflow-y: hidden; width: 100%; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overscroll-behavior: none; padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
     #root { overflow: hidden; }
     input, select, textarea { font-size: 16px !important; font-family: inherit; max-width: 100%; min-width: 0; box-sizing: border-box; }
     input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; width: 100%; }
