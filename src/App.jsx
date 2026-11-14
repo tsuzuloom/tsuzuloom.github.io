@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.1";
+const APP_VERSION = "0.14.2";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -2072,7 +2072,7 @@ const buildSample = () => {
     relationTypes:[{id:rTwin,name:"双子",color:"#8A6D3B"},{id:rMaster,name:"師",color:"#4CAF82"},{id:rLove,name:"想い",color:"#D9618A"},{id:rHate,name:"わだかまり",color:"#C0392B"}],
     parameters:[{id:pHeight,name:"身長",description:"数字で入れると身長順に並べ替えられます"},{id:pFood,name:"好きなもの",description:""},
       {id:pBio,name:"生い立ち",type:"long",description:"生まれた場所、育った環境、これまでの歩み"},{id:pPers,name:"性格",type:"long",description:"長所・短所、癖、ふるまい"}],
-    abilityParams:[{id:ab1,name:"曜力",applyAll:true},{id:ab2,name:"剣",applyAll:true},{id:ab3,name:"知",applyAll:true}],
+    abilityParams:[{id:ab1,name:"花術",applyAll:true},{id:ab2,name:"剣",applyAll:true},{id:ab3,name:"知",applyAll:true}],
     characters:[
       { id:c1, lastName:"水無瀬", firstName:"縁", lastNameFuri:"みなせ", firstNameFuri:"ゆかり", nameOrder:"last_first",
         genderId:gF, imageColor:"#8A6D3B", birthday:"512-01-03", deathDate:"", 
@@ -2083,7 +2083,7 @@ const buildSample = () => {
         ],
         relatedGroups:[{groupId:grp1,position:"花師"}], relatedTerms:[term1],
         parameters:[{paramId:pHeight,value:"156cm"},{paramId:pFood,value:"彼岸花"},
-          {paramId:pBio,value:"白霧の辺境村に、双子の妹として生まれる。六歳の冬に村の大火で父を亡くし、兄の澪とは別々の家に引き取られた。\n花師だった祖母のもとで、曜力の扱いを学んで育つ。"},
+          {paramId:pBio,value:"白霧の辺境村に、双子の妹として生まれる。六歳の冬に村の大火で父を亡くし、兄の澪とは別々の家に引き取られた。\n花師だった祖母のもとで、花術の扱いを学んで育つ。"},
           {paramId:pPers,value:"物静かで、人の話を最後まで聞く。\n一度決めたことは曲げない頑固さがあり、兄にだけは甘えが出る。"}],
         abilityStages:[stage("序盤",[45,20,60]),stage("帝都にて",[75,30,80])] },
       { id:c2, lastName:"柊", firstName:"澪", lastNameFuri:"ひいらぎ", firstNameFuri:"みお", nameOrder:"last_first",
@@ -2129,7 +2129,7 @@ const buildSample = () => {
       { id:loc1, name:"白霧の辺境村", description:"年じゅう白い霧に沈んでいる集落。", notes:"" },
       { id:loc2, name:"帝都 薬草街", description:"薬師たちの問屋が軒を連ねる、湿った路地。", notes:"" },
     ],
-    terms:[{ id:term1, name:"曜力", description:"花や万物に宿るとされる、記憶のような力。第二層まで届く者は少ない。", relatedCharacters:[c1], notes:"" }],
+    terms:[{ id:term1, name:"花術", description:"花の声を聴き、薬や守りに変える技。白霧の民に代々伝わる。", relatedCharacters:[c1], notes:"" }],
     chapters:[{ id:ch1, title:"第一章　残響の芽吹き", notes:"旅立ちから帝都到着まで。", relatedScenes:[sc1,sc2,sc3] }],
     nowDate:"531-02-20",
     scenes:[
