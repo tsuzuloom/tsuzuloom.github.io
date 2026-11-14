@@ -2253,7 +2253,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   // ---------------- desktop ----------------
   // 描き直すたびに中身が作り直されるとスクロール位置が飛ぶので、部品ではなく関数として書く
   const sideLabel=(text)=><div key={"lb_"+text} style={{ fontSize:10,fontWeight:600,color:C.hint,letterSpacing:"0.12em",padding:"16px 10px 5px" }}>{text}</div>;
-  const sideItem=(k)=>{ const sc=SECTIONS[k]; const active=deskView===k; const n=data[k]?data[k].length:undefined; return (
+  const sideItem=(k)=>{ const sc=SECTIONS[k]; const active=deskView===k; const n=(k!=="family"&&data[k])?data[k].length:undefined; return (
     <button key={k} onClick={()=>goSection(k)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:active?C.accent+"12":"transparent",borderLeft:active?`2px solid ${C.accent}`:"2px solid transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
       <Ico n={sc.icon} s={15} c={active?C.accent:C.hint}/>
       <span style={{ fontSize:13,color:active?C.text:C.sub,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{sc.label}</span>
@@ -2750,7 +2750,7 @@ const famGuessFromRelations = (data) => {
 
 const FamAvatar = ({ ch, size=40 }) => ch.image
   ? <SImg src={ch.image} style={{ width:size,height:size,borderRadius:"50%",objectFit:"cover",display:"block",flexShrink:0 }}/>
-  : <div style={{ width:size,height:size,borderRadius:"50%",background:ch.imageColor||"#8EA3C3",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.42,fontWeight:600,flexShrink:0 }}>{charInitial(ch)}</div>;
+  : <div style={{ width:size,height:size,borderRadius:"50%",background:ch.imageColor||"#8EA3C3",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.42,fontWeight:600,flexShrink:0 }}>{((ch.firstName||ch.lastName||"?").trim()||"?").slice(0,1)}</div>;
 
 function FamilyPersonSheet({ data, id, onClose, onOpenChar, setFamily }) {
   const ch=data.characters.find(c=>c.id===id);
@@ -3018,7 +3018,7 @@ function FamilyTreeView({ data, isPremium, onOpenChar, setFamily }) {
     <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",position:"relative" }}>
       {header}
       <div ref={boxRef} style={{ flex:1,overflow:"auto",margin:"0 12px 12px",background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:14,WebkitOverflowScrolling:"touch",touchAction:"pan-x pan-y" }}>
-        <div style={{ width:L.width*sc,height:L.height*sc,position:"relative" }}>
+        <div style={{ width:L.width*sc,height:L.height*sc,position:"relative",margin:"0 auto" }}>
           <div style={{ width:L.width,height:L.height,transform:`scale(${sc})`,transformOrigin:"0 0",position:"absolute",left:0,top:0 }}>
             <svg width={L.width} height={L.height} style={{ position:"absolute",left:0,top:0,overflow:"visible" }}>{paths}</svg>
             {L.ids.map(i=>{ const c=byId[i]; const n=N[i]; return (
