@@ -66,5 +66,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>キャラクター画像を撮影して登録するために、カメラを使用します。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>キャラクター画像を選んで登録するために、写真ライブラリを使用します。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>書き出した画像を写真に保存するために使用します。</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

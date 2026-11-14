@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "0.8.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -43,6 +46,74 @@ const uploadImage = async (blob) => {
   return db.storage.from(IMG_BUCKET).getPublicUrl(path).data.publicUrl;
 };
 const isEmbedded = (src) => !!src && src.startsWith("data:");
+
+// ファイルの書き出し：Webはダウンロード、iPhoneアプリは共有シート（「ファイルに保存」など）を開く
+const safeFileName = (name) => (name||"file").replace(/[\\/:*?"<>|\n\r]+/g,"_").slice(0,80);
+const saveTextFile = async (name, text, mime) => {
+  const fname = safeFileName(name);
+  if(Capacitor.isNativePlatform()){
+    const { uri } = await Filesystem.writeFile({ path: fname, data: text, directory: Directory.Cache, encoding: Encoding.UTF8 });
+    try { await Share.share({ title: fname, url: uri, dialogTitle: fname }); }
+    catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) throw e; }
+    return;
+  }
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+};
+
+// ===== 画像の表示（非公開バケット用の署名付きURL） =====
+// 保存している値は「…/storage/v1/object/public/character-images/<パス>」の形（以前の公開URLと同じ形）で、
+// 表示するときだけ、ログイン中の本人にしか発行されない期限付きURLに置き換える。
+const SIGN_TTL = 60*60;          // 署名付きURLの有効期間（秒）
+const SIGN_REFRESH = 5*60*1000;  // 期限の5分前になったら取り直す
+const storagePathOf = (src) => {
+  if(!src || typeof src!=="string" || src.startsWith("data:") || src.startsWith("blob:")) return null;
+  const m = src.match(new RegExp("/storage/v1/object/(?:public|sign|authenticated)/" + IMG_BUCKET + "/([^?#]+)"));
+  return m ? decodeURIComponent(m[1]) : null;
+};
+const signCache = new Map();   // path -> { url, exp }
+const signWaiters = new Map(); // path -> Set(callback)
+let signQueue = new Set(), signTimer = null;
+const flushSign = async () => {
+  const paths=[...signQueue]; signQueue=new Set(); signTimer=null;
+  if(!paths.length) return;
+  let rows=[];
+  try { const { data, error } = await db.storage.from(IMG_BUCKET).createSignedUrls(paths, SIGN_TTL); if(!error&&data) rows=data; } catch(e){}
+  const exp = Date.now() + SIGN_TTL*1000;
+  paths.forEach(p=>{
+    const row = rows.find(r=>r&&r.path===p);
+    const url = row&&row.signedUrl&&!row.error ? row.signedUrl : null;
+    signCache.set(p, { url, exp: url ? exp : Date.now()+30*1000 }); // 失敗時は30秒後に再試行
+    const ws = signWaiters.get(p); signWaiters.delete(p);
+    ws&&ws.forEach(cb=>cb(url));
+  });
+};
+const requestSigned = (path, cb) => {
+  if(!signWaiters.has(path)) signWaiters.set(path, new Set());
+  signWaiters.get(path).add(cb);
+  signQueue.add(path);
+  if(!signTimer) signTimer = setTimeout(flushSign, 0);
+  return () => { const ws=signWaiters.get(path); ws&&ws.delete(cb); };
+};
+const freshSigned = (path) => { const c=signCache.get(path); return c && c.exp - Date.now() > SIGN_REFRESH ? c : null; };
+const useSignedSrc = (src) => {
+  const path = storagePathOf(src);
+  const cached = path ? freshSigned(path) : null;
+  const [url,setUrl] = useState(()=> path ? (cached&&cached.url) || null : src);
+  useEffect(()=>{
+    if(!path){ setUrl(src); return; }
+    const c = freshSigned(path);
+    if(c){ setUrl(c.url || src); return; }
+    let alive=true;
+    const off = requestSigned(path, u=>{ if(alive) setUrl(u || src); });
+    return ()=>{ alive=false; off(); };
+  },[src,path]);
+  return url;
+};
+const SImg = ({ src, ...rest }) => { const u=useSignedSrc(src); return u ? <img src={u} {...rest}/> : <span style={{ ...(rest.style||{}), display:"block",background:"rgba(127,127,127,0.12)" }}/>; };
+const SvgImage = ({ href, ...rest }) => { const u=useSignedSrc(href); return u ? <image href={u} {...rest}/> : null; };
 
 const compressImage = (dataUrl) => new Promise(resolve => { const img=new Image(); img.onload=()=>{ const max=800; let w=img.width,h=img.height; if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); resolve(c.toDataURL("image/jpeg",0.82)); }; img.src=dataUrl; });
 const countChars = (str) => { if(!str) return 0; return str.replace(/\s/g,"").length; };
@@ -145,6 +216,7 @@ const parseHash = () => {
   if(p[0]==="s"&&p[1]) return { screen:"editor", storyId:p[1], section:p[2]||null, charId:(p[2]==="characters"&&p[3])?p[3]:null };
   if(p[0]==="settings") return { screen:"settings", storyId:null, section:null, charId:null };
   if(p[0]==="ideas")    return { screen:"ideas",    storyId:null, section:null, charId:null };
+  if(p[0]==="trash")    return { screen:"trash",    storyId:null, section:null, charId:null };
   return { screen:"list", storyId:null, section:null, charId:null };
 };
 const buildHash = (r) => {
@@ -156,6 +228,7 @@ const buildHash = (r) => {
   }
   if(r.screen==="settings") return "#/settings";
   if(r.screen==="ideas")    return "#/ideas";
+  if(r.screen==="trash")    return "#/trash";
   return "#/";
 };
 
@@ -379,7 +452,7 @@ const ImageUpload = ({ value, onChange }) => {
       <div style={{ display:"flex",gap:14,alignItems:"flex-start",padding:"2px 0 4px" }}>
         <div onClick={()=>!busy&&ref.current.click()} style={{ width:76,height:76,borderRadius:14,border:value?`0.5px solid ${C.border}`:`1.5px dashed ${C.border}`,overflow:"hidden",cursor:busy?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:value?"transparent":C.bg,flexShrink:0 }}>
           {busy?<span style={{ fontSize:10.5,color:C.hint }}>保存中</span>
-            :value?<img src={value} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }}/>
+            :value?<SImg src={value} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }}/>
             :<Ico n="camera" s={24} c={C.hint}/>}
         </div>
         <div style={{ flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8,paddingTop:2 }}>
@@ -408,7 +481,7 @@ const CharRelCard = ({ rel, character, relationTypes, onUpdate, onRemove }) => {
   const rt=relationTypes.find(t=>t.id===rel.relTypeId);
   return (<div style={{ border:`0.5px solid ${C.border}`,borderRadius:11,padding:"11px 12px",marginBottom:6,maxWidth:"100%",overflow:"hidden" }}>
     <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
-      <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}>{character.image?<img src={character.image} style={{ width:24,height:24,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>:<div style={{ width:24,height:24,borderRadius:"50%",background:(character.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><Ico n="person" s={13} c={character.imageColor||C.hint}/></div>}<span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(character)}</span>{rt&&<span style={{ fontSize:10,padding:"1px 7px",borderRadius:20,background:rt.color+"22",color:rt.color,border:`0.5px solid ${rt.color}`,flexShrink:0,fontWeight:600 }}>{rt.name}</span>}</div>
+      <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}>{character.image?<SImg src={character.image} style={{ width:24,height:24,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>:<div style={{ width:24,height:24,borderRadius:"50%",background:(character.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><Ico n="person" s={13} c={character.imageColor||C.hint}/></div>}<span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(character)}</span>{rt&&<span style={{ fontSize:10,padding:"1px 7px",borderRadius:20,background:rt.color+"22",color:rt.color,border:`0.5px solid ${rt.color}`,flexShrink:0,fontWeight:600 }}>{rt.name}</span>}</div>
       <button onClick={onRemove} style={{ border:"none",background:"transparent",cursor:"pointer",padding:3,opacity:0.4,flexShrink:0 }}><Ico n="x" s={14} c={C.text}/></button>
     </div>
     <div style={{ marginBottom:8 }}><Lbl>この人から見た関係</Lbl>
@@ -501,7 +574,7 @@ const EmptyState = ({ icon, title, onAdd, actionLabel }) => (
   </div>
 );
 
-const EntityCard = ({ icon, iconColor, name, subtitle, tags, onClick, onDelete, onMoveUp, onMoveDown, image }) => (<div onClick={onClick} style={{ display:"flex",alignItems:"center",padding:"11px 14px",borderBottom:`0.5px solid ${C.borderL}`,cursor:"pointer",background:C.surface,gap:10,minHeight:44 }}>{(onMoveUp!==undefined||onMoveDown!==undefined)&&(<div style={{ display:"flex",flexDirection:"column",gap:1,flexShrink:0 }}><button onClick={e=>{e.stopPropagation();onMoveUp&&onMoveUp();}} style={{ border:"none",background:"transparent",cursor:onMoveUp?"pointer":"default",padding:"3px 3px",opacity:onMoveUp?0.5:0.15,lineHeight:0 }}><Ico n="chevU" s={13} c={C.text}/></button><button onClick={e=>{e.stopPropagation();onMoveDown&&onMoveDown();}} style={{ border:"none",background:"transparent",cursor:onMoveDown?"pointer":"default",padding:"3px 3px",opacity:onMoveDown?0.5:0.15,lineHeight:0 }}><Ico n="chevD" s={13} c={C.text}/></button></div>)}<div style={{ width:38,height:38,borderRadius:10,background:C.bg,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden" }}>{image?<img src={image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<Ico n={icon} s={17} c={iconColor||C.hint}/>}</div><div style={{ flex:1,minWidth:0 }}><div style={{ fontFamily:C.display,fontSize:14,color:C.text,marginBottom:1 }}>{name||"（無題）"}</div>{subtitle&&<div style={{ fontSize:11,color:C.sub }}>{subtitle}</div>}{tags&&tags.length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginTop:3 }}>{tags.slice(0,3).map((t,i)=><Tag key={i} label={t.label} color={t.color}/>)}</div>}</div><div style={{ display:"flex",gap:2,flexShrink:0,alignItems:"center" }}><button onClick={e=>{e.stopPropagation();onDelete();}} style={{ background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",opacity:0.35 }}><Ico n="trash" s={14} c={C.text}/></button><Ico n="chevR" s={15} c={C.hint}/></div></div>);
+const EntityCard = ({ icon, iconColor, name, subtitle, tags, onClick, onDelete, onMoveUp, onMoveDown, image }) => (<div onClick={onClick} style={{ display:"flex",alignItems:"center",padding:"11px 14px",borderBottom:`0.5px solid ${C.borderL}`,cursor:"pointer",background:C.surface,gap:10,minHeight:44 }}>{(onMoveUp!==undefined||onMoveDown!==undefined)&&(<div style={{ display:"flex",flexDirection:"column",gap:1,flexShrink:0 }}><button onClick={e=>{e.stopPropagation();onMoveUp&&onMoveUp();}} style={{ border:"none",background:"transparent",cursor:onMoveUp?"pointer":"default",padding:"3px 3px",opacity:onMoveUp?0.5:0.15,lineHeight:0 }}><Ico n="chevU" s={13} c={C.text}/></button><button onClick={e=>{e.stopPropagation();onMoveDown&&onMoveDown();}} style={{ border:"none",background:"transparent",cursor:onMoveDown?"pointer":"default",padding:"3px 3px",opacity:onMoveDown?0.5:0.15,lineHeight:0 }}><Ico n="chevD" s={13} c={C.text}/></button></div>)}<div style={{ width:38,height:38,borderRadius:10,background:C.bg,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden" }}>{image?<SImg src={image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<Ico n={icon} s={17} c={iconColor||C.hint}/>}</div><div style={{ flex:1,minWidth:0 }}><div style={{ fontFamily:C.display,fontSize:14,color:C.text,marginBottom:1 }}>{name||"（無題）"}</div>{subtitle&&<div style={{ fontSize:11,color:C.sub }}>{subtitle}</div>}{tags&&tags.length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginTop:3 }}>{tags.slice(0,3).map((t,i)=><Tag key={i} label={t.label} color={t.color}/>)}</div>}</div><div style={{ display:"flex",gap:2,flexShrink:0,alignItems:"center" }}><button onClick={e=>{e.stopPropagation();onDelete();}} style={{ background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",opacity:0.35 }}><Ico n="trash" s={14} c={C.text}/></button><Ico n="chevR" s={15} c={C.hint}/></div></div>);
 
 const EntityList = ({ title, icon, iconColor, items, onAdd, onEdit, onDelete, renderName, renderSubtitle, renderTags, renderImage, onMoveUp, onMoveDown, headerExtra, subHeader, body, emptyEl }) => (<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}><div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:`0.5px solid ${C.border}`,background:C.surface,flexShrink:0 }}><div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}><Ico n={icon} s={15} c={iconColor||C.hint}/><span style={{ fontFamily:C.display,fontSize:15,color:C.text }}>{title}</span><span style={{ fontSize:11,color:C.hint }}>{items.length}</span></div><div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>{headerExtra}<button onClick={onAdd} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 13px",background:"transparent",color:C.text,border:`0.5px solid ${C.hint}`,borderRadius:20,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="plus" s={12} c={C.text}/>追加</button></div></div>{subHeader&&<div style={{ padding:"8px 12px",borderBottom:`0.5px solid ${C.borderL}`,background:C.surface,flexShrink:0 }}>{subHeader}</div>}<div style={{ flex:1,overflowY:"auto",background:C.surface }}>{items.length===0?(emptyEl||<EmptyState icon={icon} title={title} onAdd={onAdd}/>):(body||items.map((item,i)=><EntityCard key={item.id} icon={icon} iconColor={item.imageColor||item.color||iconColor} image={renderImage?renderImage(item):null} name={renderName(item)} subtitle={renderSubtitle?renderSubtitle(item):null} tags={renderTags?renderTags(item):null} onClick={()=>onEdit(item)} onDelete={()=>onDelete(item.id)} onMoveUp={onMoveUp&&i>0?()=>onMoveUp(i):onMoveUp!==undefined?null:undefined} onMoveDown={onMoveDown&&i<items.length-1?()=>onMoveDown(i):onMoveDown!==undefined?null:undefined}/>))}</div></div>);
 
@@ -744,7 +817,7 @@ const GroupEdit = ({ group: init, data, onSave, onClose, onDelete }) => {
       {g.relatedCharacters.map(cid=>{ const ch=data.characters.find(x=>x.id===cid); if(!ch) return null; return (
         <div key={cid} style={{ border:`0.5px solid ${C.border}`,borderRadius:11,padding:"10px 12px",marginBottom:6 }}>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}>{ch.image?<img src={ch.image} style={{ width:24,height:24,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>:<div style={{ width:24,height:24,borderRadius:"50%",background:(ch.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><Ico n="person" s={13} c={ch.imageColor||C.hint}/></div>}<span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(ch)}</span></div>
+            <div style={{ display:"flex",alignItems:"center",gap:7,minWidth:0 }}>{ch.image?<SImg src={ch.image} style={{ width:24,height:24,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>:<div style={{ width:24,height:24,borderRadius:"50%",background:(ch.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><Ico n="person" s={13} c={ch.imageColor||C.hint}/></div>}<span style={{ fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(ch)}</span></div>
             <button onClick={()=>u("relatedCharacters",g.relatedCharacters.filter(x=>x!==cid))} style={{ border:"none",background:"transparent",cursor:"pointer",padding:3,opacity:0.4,flexShrink:0 }}><Ico n="x" s={14} c={C.text}/></button>
           </div>
           <input value={(g.memberNotes||{})[cid]||""} onChange={e=>setMemberNote(cid,e.target.value)} placeholder="立ち位置・役職メモ（例：団長）" style={{ ...IS(),padding:"7px 9px" }}/>
@@ -874,7 +947,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
       <div style={{ flex:1,overflowY:"auto" }}>
         <div style={{ padding:"22px 18px 18px",display:"flex",gap:16,alignItems:"center",borderBottom:`0.5px solid ${C.border}` }}>
           <div style={{ width:74,height:74,borderRadius:14,overflow:"hidden",flexShrink:0,background:C.surface,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative" }}>
-            {char.image?<img src={char.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:30,color:acc }}>{charInitial(char)}</span>}
+            {char.image?<SImg src={char.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:30,color:acc }}>{charInitial(char)}</span>}
             <div style={{ position:"absolute",left:0,right:0,bottom:0,height:2,background:acc }}/>
           </div>
           <div style={{ minWidth:0,flex:1 }}>
@@ -918,7 +991,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
               {rels.map((r,i)=>{ const rt=data.relationTypes.find(t=>t.id===r.relTypeId); const arrow=r.direction==="to"?"→":r.direction==="from"?"←":"↔"; return (
                 <div key={r.charId} onClick={()=>onJump(r.charId)} style={{ display:"flex",gap:10,padding:"11px 14px",borderBottom:i<rels.length-1?`0.5px solid ${C.borderL}`:"none",cursor:"pointer",alignItems:"center" }}>
                   <div style={{ width:34,height:34,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:(r.other.imageColor||"#ccc")+"26",display:"flex",alignItems:"center",justifyContent:"center" }}>
-                    {r.other.image?<img src={r.other.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontSize:14,fontWeight:700,color:r.other.imageColor||C.hint }}>{charInitial(r.other)}</span>}
+                    {r.other.image?<SImg src={r.other.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontSize:14,fontWeight:700,color:r.other.imageColor||C.hint }}>{charInitial(r.other)}</span>}
                   </div>
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:5,flexWrap:"wrap" }}>
@@ -979,7 +1052,7 @@ const FaceGrid = ({ chars, onOpen }) => (
     {chars.map(c=>{ const col=c.imageColor||"#8EA3C3"; return (
       <button key={c.id} onClick={()=>onOpen(c)} style={{ background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
         <div style={{ width:"100%",aspectRatio:"1 / 1",borderRadius:"50%",overflow:"hidden",background:C.bg,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center" }}>
-          {c.image?<img src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:26,color:col }}>{charInitial(c)}</span>}
+          {c.image?<SImg src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:26,color:col }}>{charInitial(c)}</span>}
         </div>
         <span style={{ fontSize:11,color:C.text,textAlign:"center",lineHeight:1.35,wordBreak:"break-word" }}>{charName(c)}</span>
       </button>
@@ -993,7 +1066,7 @@ const CharacterGrid = ({ chars, data, onOpen }) => (
       <button key={c.id} onClick={()=>onOpen(c)} style={{ display:"block",textAlign:"left",padding:14,background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,cursor:"pointer",fontFamily:"inherit" }}>
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
           <div style={{ width:44,height:44,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:C.bg,border:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center" }}>
-            {c.image?<img src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:17,color:col }}>{charInitial(c)}</span>}
+            {c.image?<SImg src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:17,color:col }}>{charInitial(c)}</span>}
           </div>
           <div style={{ minWidth:0 }}>
             <div style={{ fontFamily:C.display,fontSize:15,color:C.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{charName(c)}</div>
@@ -1068,7 +1141,7 @@ const ChapterBoard = ({ data, onOpenChapter, onOpenScene, onAddChapter, onAddSce
 
 const RelFace = ({ c, size=38 }) => (
   <div style={{ width:size,height:size,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:(c.imageColor||"#ccc")+"22",display:"flex",alignItems:"center",justifyContent:"center" }}>
-    {c.image?<img src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:size*0.44,color:c.imageColor||C.hint }}>{charInitial(c)}</span>}
+    {c.image?<SImg src={c.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:size*0.44,color:c.imageColor||C.hint }}>{charInitial(c)}</span>}
   </div>
 );
 const LINE_KINDS=[["solid","一本線"],["double","二重線"],["dashed","点線"],["heart","ハート"],["cross","バツ"]];
@@ -1280,7 +1353,7 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
               {sel&&<circle cx={p.x} cy={p.y} r={nodeR+4} fill="none" stroke={C.accent} strokeWidth="2"/>}
               <circle cx={p.x} cy={p.y} r={nodeR} fill={(c.imageColor||"#8EA3C3")} opacity={0.9}/>
               {c.image
-                ? <image href={c.image} x={p.x-nodeR} y={p.y-nodeR} width={nodeR*2} height={nodeR*2} clipPath={`circle(${nodeR}px at ${nodeR}px ${nodeR}px)`} preserveAspectRatio="xMidYMid slice"/>
+                ? <SvgImage href={c.image} x={p.x-nodeR} y={p.y-nodeR} width={nodeR*2} height={nodeR*2} clipPath={`circle(${nodeR}px at ${nodeR}px ${nodeR}px)`} preserveAspectRatio="xMidYMid slice"/>
                 : <text x={p.x} y={p.y+1} textAnchor="middle" dominantBaseline="middle" fontSize={nodeR*0.75} fill="#fff" fontWeight="700">{charInitial(c)}</text>}
               <text x={p.x} y={p.y+nodeR+12} textAnchor="middle" fontSize="10" fill={C.text} fontWeight={sel?"700":"500"}>{charName(c).slice(0,6)}</text>
             </g>
@@ -1291,7 +1364,7 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
       {selChar?(
         <div style={{ background:C.surface,borderRadius:14,border:`0.5px solid ${C.border}`,padding:"12px 14px" }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
-            {selChar.image?<img src={selChar.image} style={{ width:32,height:32,borderRadius:"50%",objectFit:"cover" }}/>:<div style={{ width:32,height:32,borderRadius:"50%",background:(selChar.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="person" s={16} c={selChar.imageColor||C.hint}/></div>}
+            {selChar.image?<SImg src={selChar.image} style={{ width:32,height:32,borderRadius:"50%",objectFit:"cover" }}/>:<div style={{ width:32,height:32,borderRadius:"50%",background:(selChar.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="person" s={16} c={selChar.imageColor||C.hint}/></div>}
             <span style={{ fontFamily:C.display,fontSize:15,color:C.text }}>{charName(selChar)}</span>
             <div style={{ marginLeft:"auto" }}><Btn small icon="person" onClick={()=>onOpenChar&&onOpenChar(selChar)}>ページ</Btn></div>
           </div>
@@ -1303,7 +1376,7 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
               return (
               <div key={rel.charId} style={{ display:"flex",alignItems:"center",gap:9,padding:"9px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
                 <div style={{ width:30,height:30,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:(other.imageColor||"#ccc")+"26",display:"flex",alignItems:"center",justifyContent:"center" }}>
-                  {other.image?<img src={other.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:13,color:other.imageColor||C.hint }}>{charInitial(other)}</span>}
+                  {other.image?<SImg src={other.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<span style={{ fontFamily:C.display,fontSize:13,color:other.imageColor||C.hint }}>{charInitial(other)}</span>}
                 </div>
                 <div style={{ minWidth:0,flex:1 }}>
                   <div style={{ fontSize:13.5,color:C.text,marginBottom:3 }}>{charName(other)}</div>
@@ -1374,7 +1447,7 @@ const SearchScreen = ({ data, onClose, onOpenItem }) => {
                 {grouped[kind].map((r,i)=>(
                   <div key={r.type+r.id+i} onClick={()=>onOpenItem(r)} style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,padding:"11px 13px",marginBottom:6,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start" }}>
                     <div style={{ width:32,height:32,borderRadius:9,background:r.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden" }}>
-                      {r.type==="character"&&r.item.image?<img src={r.item.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<Ico n={r.icon} s={15} c={r.color}/>}
+                      {r.type==="character"&&r.item.image?<SImg src={r.item.image} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<Ico n={r.icon} s={15} c={r.color}/>}
                     </div>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontSize:13.5,fontWeight:600,color:C.text,marginBottom:2 }}><Hi text={r.title}/></div>
@@ -1767,7 +1840,8 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const moveEntity=useCallback((key,idx,dir)=>upd(p=>{const items=[...p[key]];const ni=idx+dir;if(ni<0||ni>=items.length) return p;[items[idx],items[ni]]=[items[ni],items[idx]];return{...p,[key]:items};}),[upd]);
   const setLayout=(v)=>{ setCharLayout(v); localStorage.setItem("tl_charLayout",v); };
 
-  const exportData=useCallback(()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${data.storyTitle||"story"}_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);},[data]);
+  const alertSaveFail=(e)=>setConfirmBox({ title:"書き出せませんでした", body:"ファイルを保存できませんでした。もう一度お試しください。\n（"+String((e&&e.message)||e)+"）", okLabel:"閉じる", safe:true, alone:true });
+  const exportData=useCallback(()=>{ saveTextFile(`${data.storyTitle||"story"}_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(data,null,2), "application/json").catch(e=>alertSaveFail(e)); },[data]);
   const exportMarkdown=useCallback(()=>{
     let md=`# ${data.storyTitle||"ストーリー"}\n\n`;
     if(data.storySynopsis) md+=`## あらすじ\n\n${data.storySynopsis}\n\n`;
@@ -1777,7 +1851,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     if(data.terms.length){ md+=`---\n\n## 用語集\n\n`; data.terms.forEach(t=>{ md+=`### ${t.name||"（無名）"}\n\n`; if(t.description) md+=`${t.description}\n\n`; }); }
     if(data.chapters.length){ md+=`---\n\n## 章構成\n\n`; data.chapters.forEach((ch,idx)=>{ md+=`### ${ch.title||`第${idx+1}章`}\n\n`; const sc=ch.relatedScenes.map(id=>data.scenes.find(s=>s.id===id)).filter(Boolean); if(sc.length) md+=`**シーン:** ${sc.map(s=>s.title||"（無題）").join("、")}\n\n`; if(ch.notes) md+=`${ch.notes}\n\n`; }); }
     if(data.scenes.length){ md+=`---\n\n## シーン\n\n`; data.scenes.forEach(s=>{ md+=`### ${s.title||"（無題）"}\n\n`; const info=[]; if(s.startDate){let d=s.startDate;if(s.endDate&&s.endDate!==s.startDate)d+=` → ${s.endDate}`;info.push(`**日時:** ${d}`);} const chap=data.chapters.find(c=>c.id===s.relatedChapterId);if(chap) info.push(`**章:** ${chap.title||"（無題）"}`); const loc=data.locations.find(l=>l.id===s.relatedLocationId);if(loc) info.push(`**場所:** ${loc.name}`); const chars=s.relatedCharacters.map(id=>{const ch=data.characters.find(c=>c.id===id);return ch?charName(ch):null;}).filter(Boolean); if(chars.length) info.push(`**登場人物:** ${chars.join("、")}`); if(info.length) md+=info.join("  \n")+"\n\n"; if(s.notes) md+=`${s.notes}\n\n`; if(s.script) md+=`\`\`\`\n${s.script}\n\`\`\`\n\n`; }); }
-    const blob=new Blob([md],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${data.storyTitle||"story"}.md`;a.click();URL.revokeObjectURL(url);
+    saveTextFile(`${data.storyTitle||"story"}.md`, md, "text/markdown;charset=utf-8").catch(e=>alertSaveFail(e));
   },[data]);
   const handleImport=useCallback((e)=>{
     const file=e.target.files[0]; if(!file) return;
@@ -2280,13 +2354,83 @@ function StoryList({ stories, onOpen, onCreate, onDuplicate, onDelete, onRename,
       <div style={{ position:"absolute",bottom:0,left:0,right:0,padding:"12px 16px calc(16px + env(safe-area-inset-bottom,0px))",background:C.surface,borderTop:`0.5px solid ${C.border}`,maxWidth:isDesktop?"none":480,margin:"0 auto" }}>
         <div style={{ maxWidth:isDesktop?960:"none",margin:"0 auto" }}><Btn variant="primary" icon="plus" full onClick={onCreate}>新しい作品</Btn></div>
       </div>
-      {delFor&&(<Modal compact title="作品を削除" onClose={()=>setDelFor(null)} footer={<><Btn onClick={()=>setDelFor(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="danger" icon="trash" onClick={runDelete}>{deleting?"削除中...":"削除する"}</Btn></>}>
+      {delFor&&(<Modal compact title="作品を削除" onClose={()=>setDelFor(null)} footer={<><Btn onClick={()=>setDelFor(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="danger" icon="trash" onClick={runDelete}>{deleting?"移動中...":"ゴミ箱に移す"}</Btn></>}>
         <div style={{ fontSize:14,fontWeight:600,color:C.text,marginBottom:8,wordBreak:"break-word" }}>「{delFor.title||"（無題）"}」</div>
-        <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.8 }}>この作品を削除します。人物・シーン・章など、中のデータもすべて消えます。取り消せません。</div>
-        <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginTop:10 }}>残しておきたい場合は、先に作品を開いて「ストーリー設定 → JSONでバックアップ」を実行してください。</div>
+        <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.8 }}>この作品をゴミ箱に移します。<br/>{TRASH_DAYS}日以内なら、設定 →「ゴミ箱」から元に戻せます。{TRASH_DAYS}日たつと完全に削除されます。</div>
         {delErr&&<div style={{ marginTop:14,padding:"11px 12px",borderRadius:10,background:C.danger+"14",border:`0.5px solid ${C.danger}`,color:C.danger,fontSize:12,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{delErr}</div>}
       </Modal>)}
       {renameFor&&(<Modal compact title="作品名の変更" onClose={()=>setRenameFor(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>{onRename(renameFor,renameVal);setRenameFor(null);}}>変更</Btn></>}><Inp label="作品名" value={renameVal} onChange={setRenameVal} placeholder="作品名..."/></Modal>)}
+    </div>
+  );
+}
+
+// ===================== TRASH =====================
+const TRASH_DAYS = 30;
+const daysLeft = (deletedAt) => Math.max(0, TRASH_DAYS - Math.floor((Date.now() - new Date(deletedAt).getTime())/864e5));
+function TrashScreen({ onBack, userId, onRestored }) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState("");
+  const [busyId,setBusyId]=useState(null);
+  const [confirm,setConfirm]=useState(null); // {mode:"one",item} | {mode:"all"}
+  const load=useCallback(async()=>{
+    setErr("");
+    const { data, error } = await db.from("stories").select("id,title,sort_order,updated_at,summary,deleted_at").eq("user_id",userId).not("deleted_at","is",null).order("deleted_at",{ascending:false});
+    if(error){ setErr("ゴミ箱を読み込めませんでした。\n"+error.message); setItems([]); return; }
+    setItems(data||[]);
+  },[userId]);
+  useEffect(()=>{ load(); },[load]);
+  const restore=async(it)=>{
+    setBusyId(it.id); setErr("");
+    const { data, error } = await db.from("stories").update({ deleted_at:null }).eq("id",it.id).select("id,title,sort_order,updated_at,summary");
+    setBusyId(null);
+    if(error||!data||!data.length){ setErr("元に戻せませんでした。"+(error?"\n"+error.message:"")); return; }
+    setItems(items.filter(x=>x.id!==it.id));
+    onRestored&&onRestored(data[0]);
+  };
+  const purge=async()=>{
+    const c=confirm; setConfirm(null); setErr("");
+    const ids = c.mode==="all" ? items.map(x=>x.id) : [c.item.id];
+    if(!ids.length) return;
+    setBusyId(c.mode==="all"?"all":c.item.id);
+    const { data, error } = await db.from("stories").delete().in("id",ids).not("deleted_at","is",null).select("id");
+    setBusyId(null);
+    if(error){ setErr("削除できませんでした。\n"+error.message); return; }
+    const gone=new Set((data||[]).map(x=>x.id));
+    setItems(items.filter(x=>!gone.has(x.id)));
+  };
+  return (
+    <div style={{ height:"100%",display:"flex",flexDirection:"column" }}>
+      <div style={{ display:"flex",alignItems:"center",gap:8,padding:"11px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
+        <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="chevL" s={18} c={C.accent}/><span style={{ fontSize:12,color:C.accent }}>戻る</span></button>
+        <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>ゴミ箱</span>
+        <div style={{ flex:1 }}/>
+        {items&&items.length>0&&<Btn small variant="ghost" onClick={()=>setConfirm({mode:"all"})}>空にする</Btn>}
+      </div>
+      <div style={{ flex:1,overflowY:"auto",padding:"14px 16px calc(24px + env(safe-area-inset-bottom,0px))" }}>
+        <div style={{ maxWidth:620,margin:"0 auto" }}>
+          <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,padding:"0 4px 12px" }}>削除した作品は、ここに{TRASH_DAYS}日間残ります。{TRASH_DAYS}日たつと完全に削除されます。</div>
+          {err&&<div style={{ marginBottom:12,padding:"11px 12px",borderRadius:10,background:C.danger+"14",border:`0.5px solid ${C.danger}`,color:C.danger,fontSize:12,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{err}</div>}
+          {items===null
+            ? <div style={{ textAlign:"center",fontSize:13,color:C.hint,padding:"30px 0" }}>読み込み中...</div>
+            : items.length===0
+              ? <div style={{ textAlign:"center",fontSize:13,color:C.hint,padding:"40px 0" }}>ゴミ箱は空です</div>
+              : <div style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:14,overflow:"hidden" }}>
+                  {items.map((it,i)=>(
+                    <div key={it.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i===items.length-1?"none":`0.5px solid ${C.borderL}` }}>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontFamily:C.display,fontSize:14,color:C.text,wordBreak:"break-word" }}>{it.title||"（無題）"}</div>
+                        <div style={{ fontSize:11,color:C.hint,marginTop:2 }}>あと{daysLeft(it.deleted_at)}日で完全に削除</div>
+                      </div>
+                      <Btn small variant="primary" onClick={()=>busyId?null:restore(it)}>{busyId===it.id?"...":"元に戻す"}</Btn>
+                      <button onClick={()=>busyId?null:setConfirm({mode:"one",item:it})} title="完全に削除" style={{ background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",opacity:0.6 }}><Ico n="trash" s={16} c={C.danger}/></button>
+                    </div>
+                  ))}
+                </div>}
+        </div>
+      </div>
+      {confirm&&(<Modal compact title={confirm.mode==="all"?"ゴミ箱を空にする":"完全に削除"} onClose={()=>setConfirm(null)} footer={<><Btn onClick={()=>setConfirm(null)}>キャンセル</Btn><div style={{ flex:1 }}/><Btn variant="danger" icon="trash" onClick={purge}>完全に削除する</Btn></>}>
+        <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.85 }}>{confirm.mode==="all"?`ゴミ箱の${items.length}件の作品を`:`「${confirm.item.title||"（無題）"}」を`}完全に削除します。<b style={{ color:C.text }}>元には戻せません。</b></div>
+      </Modal>)}
     </div>
   );
 }
@@ -2319,6 +2463,39 @@ const deleteMyAccount = async () => {
   if(error) throw new Error("アカウントを削除できませんでした。時間をおいてもう一度お試しください。\n（" + error.message + "）");
   try { await db.auth.signOut(); } catch(e){}
 };
+
+function ChangeEmailDialog({ current, onClose }) {
+  const [email,setEmail]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(null); // {ok:bool,text}
+  const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && email.trim().toLowerCase()!==(current||"").toLowerCase();
+  const run=async()=>{
+    if(!valid||busy) return;
+    setBusy(true); setMsg(null);
+    const { error } = await db.auth.updateUser({ email: email.trim() }, { emailRedirectTo: SITE_URL });
+    setBusy(false);
+    if(error){
+      const rate=/rate|limit|seconds/i.test(error.message);
+      setMsg({ ok:false, text: rate ? "短い時間に何度も送信されたため、受け付けられませんでした。しばらく時間をおいてからお試しください。" : "変更できませんでした。\n（"+error.message+"）" });
+      return;
+    }
+    setMsg({ ok:true, text:"確認メールを送りました。メールのリンクを開くと変更が完了します。\n今のアドレスと新しいアドレスの両方に確認メールが届く場合は、両方のリンクを開いてください。届かないときは迷惑メールフォルダもご確認ください。" });
+  };
+  return (
+    <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }} onClick={e=>{ if(e.target===e.currentTarget&&!busy) onClose(); }}>
+      <div style={{ background:C.surface,borderRadius:16,padding:20,width:"100%",maxWidth:380,boxShadow:"0 8px 30px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontFamily:C.display,fontSize:17,color:C.text,marginBottom:10 }}>メールアドレスを変更</div>
+        <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:10 }}>今のアドレス：{current}</div>
+        {!(msg&&msg.ok)&&<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="新しいメールアドレス" disabled={busy} autoCapitalize="off" autoCorrect="off" style={{ width:"100%",padding:"11px 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:C.bg,color:C.text,marginBottom:12 }}/>}
+        {msg&&<div style={{ fontSize:12,color:msg.ok?C.sub:C.danger,lineHeight:1.8,marginBottom:12,whiteSpace:"pre-wrap" }}>{msg.text}</div>}
+        <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
+          <Btn variant="ghost" onClick={()=>{ if(!busy) onClose(); }}>{msg&&msg.ok?"閉じる":"キャンセル"}</Btn>
+          {!(msg&&msg.ok)&&<Btn variant="primary" onClick={run}>{busy?"送信中...":"確認メールを送る"}</Btn>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DeleteAccountDialog({ onClose }) {
   const [text,setText]=useState("");
@@ -2364,8 +2541,9 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, onLogout }) {
+function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
+  const [mailOpen,setMailOpen]=useState(false);
   const native=isNativeApp();
   return (
     <div style={{ height:"100%",display:"flex",flexDirection:"column" }}>
@@ -2378,6 +2556,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
 
         <SetGroup title="アカウント">
           <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
+          <SetRow icon="mail" label="メールアドレスを変更" onClick={()=>setMailOpen(true)}/>
           <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
         </SetGroup>
         <div style={{ fontSize:11,color:C.hint,lineHeight:1.85,padding:"0 4px",margin:"-14px 0 22px" }}>作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。</div>
@@ -2399,6 +2578,10 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
           <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
         </SetGroup>
 
+        <SetGroup title="データ">
+          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品を${TRASH_DAYS}日間まで元に戻せます`} onClick={onOpenTrash} last/>
+        </SetGroup>
+
         <SetGroup title="サポート">
           <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
           <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")}/>
@@ -2410,6 +2593,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         <SetGroup title="このアプリについて">
           <SetRow icon="info" label="このアプリについて" sub="個人開発・データの扱い・料金について" onClick={()=>openExternal(DOCS_URL+"about.html")}/>
           <SetRow icon="timeline" label="アップデート情報" onClick={()=>openExternal(DOCS_URL+"changelog.html")}/>
+          <SetRow icon="pin" label="今後の予定と不具合情報" onClick={()=>openExternal(DOCS_URL+"roadmap.html")}/>
           <SetRow icon="doc" label="利用規約" onClick={()=>openExternal(DOCS_URL+"terms.html")}/>
           <SetRow icon="shield" label="プライバシーポリシー" onClick={()=>openExternal(DOCS_URL+"privacy.html")}/>
           <SetRow icon="link" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
@@ -2426,6 +2610,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         </div>
       </div>
       {delOpen&&<DeleteAccountDialog onClose={()=>setDelOpen(false)}/>}
+      {mailOpen&&<ChangeEmailDialog current={email} onClose={()=>setMailOpen(false)}/>}
     </div>
   );
 }
@@ -2498,7 +2683,9 @@ function App() {
         if(!meta){ await db.from("user_meta").insert({user_id:session.user.id,ideas:[],settings:{}}); meta={ideas:[],settings:{}}; }
         setIdeas(meta.ideas||[]);
         if(meta.settings){ if(meta.settings.theme){ setTheme(meta.settings.theme); localStorage.setItem("sc_theme",meta.settings.theme);} if(typeof meta.settings.darkMode==="boolean"){ setDark(meta.settings.darkMode); localStorage.setItem("sc_dark",meta.settings.darkMode?"1":"0"); } if(typeof meta.settings.serifHeads==="boolean"){ setSerifHeads(meta.settings.serifHeads); localStorage.setItem("tl_serif",meta.settings.serifHeads?"1":"0"); } }
-        let { data:rows } = await db.from("stories").select("id,title,sort_order,updated_at,summary").eq("user_id",session.user.id).order("sort_order",{ascending:true});
+        // ゴミ箱に入れてから30日たった作品は完全に削除する
+        try { await db.from("stories").delete().eq("user_id",session.user.id).lt("deleted_at",new Date(Date.now()-TRASH_DAYS*864e5).toISOString()); } catch(e){ console.error(e); }
+        let { data:rows } = await db.from("stories").select("id,title,sort_order,updated_at,summary").eq("user_id",session.user.id).is("deleted_at",null).order("sort_order",{ascending:true});
         // 一度も作品がなく、見本もまだ入れていない人にだけ見本を1つ用意する
         if((!rows||rows.length===0) && !(meta.settings&&meta.settings.sampleDone)){
           try {
@@ -2551,7 +2738,7 @@ function App() {
     restored.current=true;
     const r=bootRoute.current;
     if(r.screen==="editor"&&r.storyId&&stories.some(x=>x.id===r.storyId)) openStory(r.storyId,r.section,r.charId);
-    else if(r.screen==="settings"||r.screen==="ideas") setScreen(r.screen);
+    else if(r.screen==="settings"||r.screen==="ideas"||r.screen==="trash") setScreen(r.screen);
     else if((window.location.hash||"#/")!=="#/") window.history.replaceState(null,"","#/");
   },[session,stories,recovery]);
 
@@ -2585,7 +2772,7 @@ function App() {
     setScreen("editor"); setOpenId(id); setOpenData(null); setLoadError("");
     setSection(sec||null); setCharRoute(chId||null);
     try {
-      const { data:row, error } = await db.from("stories").select("data").eq("id",id).single();
+      const { data:row, error } = await db.from("stories").select("data").eq("id",id).is("deleted_at",null).single();
       if(error) throw error;
       setOpenData(norm(row?row.data:{}));
     } catch(e){
@@ -2619,10 +2806,10 @@ function App() {
   };
   const deleteStory=async(id)=>{
     let removed=null, error=null;
-    try { const r = await db.from("stories").delete().eq("id",id).select("id"); removed=r.data; error=r.error; }
+    try { const r = await db.from("stories").update({ deleted_at:new Date().toISOString() }).eq("id",id).select("id"); removed=r.data; error=r.error; }
     catch(e){ return "通信に失敗しました。\n"+(e&&e.message?e.message:String(e)); }
     if(error) return "削除できませんでした。\n"+error.message;
-    if(!removed||removed.length===0) return "削除できませんでした。\nこの作品を削除する権限がありません。別のアカウントで作られた作品か、ログインの有効期限が切れている可能性があります。一度ログアウトして入り直してください。";
+    if(!removed||removed.length===0) return "ゴミ箱に移せませんでした。\nこの作品を削除する権限がありません。別のアカウントで作られた作品か、ログインの有効期限が切れている可能性があります。一度ログアウトして入り直してください。";
     setStories(stories.filter(s=>s.id!==id));
     if(openId===id){ backToList(); }
     return null;
@@ -2686,7 +2873,8 @@ function App() {
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} email={session.user.email} onLogout={()=>db.auth.signOut()}/>}
+      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} email={session.user.email} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
+      {screen==="trash"&&<TrashScreen onBack={()=>setScreen("settings")} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
     </div>
   );
