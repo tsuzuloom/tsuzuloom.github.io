@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.12.0";
+const APP_VERSION = "0.13.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -254,6 +254,7 @@ const norm = (d) => {
     calendar:normCal(d.calendar),
     family:Array.isArray(d.family)?d.family.filter(l=>l&&l.a&&l.b&&["parent","spouse","sibling"].includes(l.type)):[],
     familySort:(d.familySort&&typeof d.familySort==="object"&&!Array.isArray(d.familySort))?d.familySort:{},
+    events:(d.events||[]).filter(e=>e&&e.id).map(e=>({title:"",startDate:"",endDate:"",notes:"",color:"",...e,relatedCharacters:Array.isArray(e.relatedCharacters)?e.relatedCharacters:[]})),
     relationTypes:d.relationTypes||[{id:uid(),name:"親子",color:"#E8916E"},{id:uid(),name:"友人",color:"#4CAF82"},{id:uid(),name:"恋愛",color:"#D9618A"},{id:uid(),name:"敵対",color:"#C0392B"}],
   };
 };
@@ -1174,6 +1175,10 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
             </VSection>
           )}
 
+          {(()=>{ const n=buildTimeline(data,{ charId:char.id, kinds:{scene:true,event:true,life:true} }).length; return n>0&&(
+            <VSection title="年表" count={n} accent={acc}><CharTimeline data={data} char={char}/></VSection>
+          ); })()}
+
           {scenes.length>0&&(
             <VSection title="登場シーン" count={scenes.length} accent={acc}>
               <InfoRows rows={scenes.map(s=>[dateLabel(data,s.startDate)||"日付なし",s.title||"（無題）"])}/>
@@ -1564,6 +1569,7 @@ const SearchScreen = ({ data, onClose, onOpenItem }) => {
     data.groups.forEach(g=>{ const f=[["集団名",g.name],["説明",g.description],["備考",g.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"group",kind:"集団",icon:"group",color:"#D9618A",id:g.id,title:g.name||"（無名）",label:f[0],snippet:snip(String(f[1]),query),item:g}); });
     data.locations.forEach(l=>{ const f=[["場所名",l.name],["説明",l.description],["備考",l.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"location",kind:"場所",icon:"pin",color:"#4CAF82",id:l.id,title:l.name||"（無名）",label:f[0],snippet:snip(String(f[1]),query),item:l}); });
     data.scenes.forEach(s=>{ const f=[["タイトル",s.title],["脚本",s.script],["備考",s.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"scene",kind:"シーン",icon:"scene",color:"#5B9BD5",id:s.id,title:s.title||"（無題）",label:f[0],snippet:snip(String(f[1]),query),item:s}); });
+    (data.events||[]).forEach(e=>{ const f=[["出来事",e.title],["メモ",e.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"event",kind:"出来事",icon:"calendar",color:e.color||"#C0392B",id:e.id,title:e.title||"（無題の出来事）",label:f[0],snippet:snip(String(f[1]),query),item:e}); });
     data.chapters.forEach(c=>{ const f=[["章タイトル",c.title],["備考",c.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"chapter",kind:"章",icon:"book",color:"#9B7DD4",id:c.id,title:c.title||"（無題）",label:f[0],snippet:snip(String(f[1]),query),item:c}); });
     data.terms.forEach(t=>{ const f=[["用語名",t.name],["説明",t.description],["備考",t.notes]].find(([_,v])=>hit(v)); if(f) results.push({type:"term",kind:"用語",icon:"term",color:"#C0392B",id:t.id,title:t.name||"（無名）",label:f[0],snippet:snip(String(f[1]),query),item:t}); });
   }
@@ -1672,38 +1678,212 @@ const WordCountView = ({ data }) => {
   );
 };
 
-const TimelineView = ({ data }) => {
-  const scenes=[...data.scenes].filter(s=>s.startDate).sort((a,b)=>(dayIndex(data,a.startDate)||0)-(dayIndex(data,b.startDate)||0));
-  const groups=[];
-  scenes.forEach(sc=>{ const last=groups[groups.length-1];
-    if(last&&last.key===sc.startDate) last.items.push(sc); else groups.push({key:sc.startDate,items:[sc]}); });
+// ===================== TIMELINE =====================
+// 年表の項目：シーン・出来事・誕生・死去を1本の時間軸に並べる
+const TL_KIND_ORDER = { birth:0, event:1, scene:2, death:3 };
+const EVENT_COLORS = ["#C0392B","#E8916E","#D9A404","#4CAF82","#0E9BB5","#5B9BD5","#9B7DD4","#7B8DA6"];
+const tlYearLabel = (data,y) => {
+  const cal=data.calendar;
+  if(!cal||!cal.enabled) return `${y}年`;
+  const base=`${cal.yearLabel||""}${y}年`;
+  const e=eraFor(cal,{y,m:1,d:1});
+  if(!e||cal.display==="base") return base;
+  const n=y-e.y+1; const era=`${e.name}${n===1?"元":n}年`;
+  return cal.display==="era"?era:`${era}（${base}）`;
+};
+const tlAgesAt = (data,charIds,date) => charIds.map(id=>data.characters.find(c=>c.id===id)).filter(Boolean).map(ch=>{
+  let age=null;
+  if(ch.birthday&&date){ const di=dayIndex(data,date), bi=dayIndex(data,ch.birthday), de=ch.deathDate?dayIndex(data,ch.deathDate):null;
+    if(di!=null&&bi!=null&&di>=bi&&(de==null||di<=de)) age=ageBetween(data,ch.birthday,date); }
+  return { ch, age };
+});
+const buildTimeline = (data, f={}) => {
+  const kinds=f.kinds||{scene:true,event:true,life:true};
+  const out=[];
+  if(kinds.scene) (data.scenes||[]).forEach(s=>{ if(!s.startDate) return; if(f.chapterId&&s.relatedChapterId!==f.chapterId) return; out.push({ key:"s"+s.id, kind:"scene", date:s.startDate, end:s.endDate, title:s.title||"（無題）", chars:s.relatedCharacters||[], item:s }); });
+  if(kinds.event&&!f.chapterId) (data.events||[]).forEach(e=>{ if(!e.startDate) return; out.push({ key:"e"+e.id, kind:"event", date:e.startDate, end:e.endDate, title:e.title||"（無題の出来事）", chars:e.relatedCharacters||[], item:e }); });
+  if(kinds.life&&!f.chapterId) (data.characters||[]).forEach(c=>{
+    if(c.birthday) out.push({ key:"b"+c.id, kind:"birth", date:c.birthday, title:`${charName(c)} 誕生`, chars:[c.id], item:c });
+    if(c.deathDate){ const a=c.birthday?ageBetween(data,c.birthday,c.deathDate):null; out.push({ key:"d"+c.id, kind:"death", date:c.deathDate, title:`${charName(c)} 死去${a!=null?`（享年${a}）`:""}`, chars:[c.id], item:c }); }
+  });
+  const fromI=f.from?dayIndex(data,f.from):null, toI=f.to?dayIndex(data,f.to):null;
+  const res=out.map(x=>({ ...x, idx:dayIndex(data,x.date), endIdx:x.end?dayIndex(data,x.end):null })).filter(x=>{
+    if(x.idx==null) return false;
+    if(f.charId&&!x.chars.includes(f.charId)) return false;
+    const last=x.endIdx!=null&&x.endIdx>x.idx?x.endIdx:x.idx;
+    if(fromI!=null&&last<fromI) return false;
+    if(toI!=null&&x.idx>toI) return false;
+    return true;
+  });
+  res.sort((a,b)=>a.idx-b.idx||TL_KIND_ORDER[a.kind]-TL_KIND_ORDER[b.kind]);
+  return res;
+};
+
+const EventMark = ({ color, size=10 }) => <div style={{ width:size,height:size,transform:"rotate(45deg)",background:color,borderRadius:2,flexShrink:0 }}/>;
+
+const EventEdit = ({ ev: init, data, onSave, onClose, onDelete }) => {
+  const [e,setE]=useState(()=>({ id:uid(),title:"",startDate:"",endDate:"",notes:"",color:EVENT_COLORS[0],relatedCharacters:[],...(init||{}) }));
+  const u=(k,v)=>setE(p=>({...p,[k]:v}));
+  const ages=tlAgesAt(data,e.relatedCharacters,e.startDate).filter(x=>x.age!=null);
+  return (<Modal title={e.title||"新しい出来事"} onClose={onClose} footer={<>{init&&<Btn variant="danger" icon="trash" small onClick={onDelete}>削除</Btn>}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={()=>onSave(e)}>保存</Btn></>}>
+    <Inp label="出来事の名前" value={e.title} onChange={v=>u("title",v)} placeholder="例：王国の建国、大戦の終結、主人公の家出..."/>
+    <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}>
+      <DateInp cal={data.calendar} label="日付（始まり）" value={e.startDate} onChange={v=>u("startDate",v)}/>
+      <DateInp cal={data.calendar} label="終わり（任意）" value={e.endDate} onChange={v=>u("endDate",v)}/>
+    </div>
+    {!e.startDate&&<div style={{ fontSize:11,color:C.hint,margin:"-6px 0 12px",lineHeight:1.7 }}>日付を入れると年表に並びます。</div>}
+    <Field label="色">
+      <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>{EVENT_COLORS.map(col=>(
+        <button key={col} onClick={()=>u("color",col)} aria-label={col} style={{ width:30,height:30,borderRadius:8,border:`2px solid ${e.color===col?C.text:"transparent"}`,background:"transparent",padding:3,cursor:"pointer" }}><div style={{ width:"100%",height:"100%",borderRadius:5,background:col }}/></button>
+      ))}</div>
+    </Field>
+    <Field label="関わる人物" mb={14}>
+      <div style={{ display:"flex",flexWrap:"wrap",gap:5,marginBottom:8 }}>{e.relatedCharacters.map(id=>{const ch=data.characters.find(c=>c.id===id);return ch?<Tag key={id} label={charName(ch)} color={ch.imageColor} onRemove={()=>u("relatedCharacters",e.relatedCharacters.filter(x=>x!==id))}/>:null;})}</div>
+      <AdditiveLinker available={data.characters.filter(c=>!e.relatedCharacters.includes(c.id))} onAdd={id=>u("relatedCharacters",[...e.relatedCharacters,id])} getLabel={c=>charName(c)} getColor={c=>c.imageColor}/>
+    </Field>
+    {ages.length>0&&<div style={{ background:C.tag,borderRadius:10,padding:"10px 12px",marginBottom:14 }}><Lbl>この時の年齢</Lbl>{ages.map(x=><div key={x.ch.id} style={{ display:"flex",justifyContent:"space-between",fontSize:12.5,color:C.text,padding:"2px 0" }}><span>{charName(x.ch)}</span><span>{x.age}歳</span></div>)}</div>}
+    <Inp label="メモ" value={e.notes} onChange={v=>u("notes",v)} rows={3} placeholder="何が起きたか、物語への影響など..."/>
+  </Modal>);
+};
+
+const TimelineView = ({ data, onEditScene, onEditEvent, onAddEvent, onOpenChar }) => {
+  const [kinds,setKinds]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem("tl_tlKinds")||"null"); if(v&&typeof v==="object") return {scene:v.scene!==false,event:v.event!==false,life:!!v.life}; } catch(e){} return {scene:true,event:true,life:false}; });
+  const [filterOpen,setFilterOpen]=useState(false);
+  const [charId,setCharId]=useState("");
+  const [chapterId,setChapterId]=useState("");
+  const [from,setFrom]=useState("");
+  const [to,setTo]=useState("");
+  const setKind=(k)=>setKinds(p=>{ const n={...p,[k]:!p[k]}; try { localStorage.setItem("tl_tlKinds",JSON.stringify(n)); } catch(e){} return n; });
+  const entries=buildTimeline(data,{ kinds, charId, chapterId, from, to });
+  const nFilters=[charId,chapterId,from,to].filter(Boolean).length;
+  const focus=charId?data.characters.find(c=>c.id===charId):null;
+  const nowI=data.nowDate?dayIndex(data,data.nowDate):null;
+  const undated=(data.events||[]).filter(e=>!e.startDate);
+
+  // 年 → 同じ日付 の順にまとめる。「いまここ」の位置も差し込む
+  const blocks=[]; let nowPlaced=nowI==null;
+  const nowY=data.nowDate?(parseYMD(data.nowDate)||{}).y:null;
+  const yearBlock=(y)=>{ let yb=blocks[blocks.length-1]; if(!yb||yb.year!==y){ yb={ year:y, days:[] }; blocks.push(yb); } return yb; };
+  entries.forEach(x=>{
+    if(!nowPlaced&&x.idx>nowI){ yearBlock(nowY).days.push({ now:true }); nowPlaced=true; }
+    const yb=yearBlock((parseYMD(x.date)||{}).y);
+    let db=yb.days[yb.days.length-1];
+    if(!db||db.now||db.date!==x.date){ db={ date:x.date, items:[] }; yb.days.push(db); }
+    db.items.push(x);
+  });
+  if(!nowPlaced&&entries.length) yearBlock(nowY).days.push({ now:true });
+  const chip=(k,label,mark)=>(
+    <button key={k} onClick={()=>setKind(k)} style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 11px",borderRadius:18,border:`1px solid ${kinds[k]?C.accent:C.border}`,background:kinds[k]?C.accent+"14":"transparent",color:kinds[k]?C.text:C.hint,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}>{mark}{label}</button>
+  );
+  const ageTags=(x)=>tlAgesAt(data,x.chars,x.date);
+  const card=(x)=>{
+    if(x.kind==="birth"||x.kind==="death") return (
+      <button key={x.key} onClick={()=>onOpenChar&&onOpenChar(x.item.id)} style={{ display:"flex",alignItems:"center",gap:8,padding:"5px 2px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
+        <div style={{ width:8,height:8,borderRadius:"50%",border:`1.5px solid ${x.item.imageColor||C.hint}`,background:x.kind==="birth"?x.item.imageColor||C.hint:"transparent",flexShrink:0 }}/>
+        <span style={{ fontSize:12.5,color:C.sub }}>{x.title}</span>
+      </button>
+    );
+    const isEv=x.kind==="event";
+    const col=isEv?(x.item.color||EVENT_COLORS[0]):C.accent;
+    const chap=!isEv?data.chapters.find(c=>c.id===x.item.relatedChapterId):null;
+    return (
+      <button key={x.key} onClick={()=>isEv?onEditEvent(x.item):onEditScene(x.item)} style={{ display:"block",width:"100%",textAlign:"left",background:C.surface,borderRadius:11,padding:"10px 12px",border:`0.5px solid ${C.border}`,borderLeft:`3px solid ${col}`,cursor:"pointer",fontFamily:"inherit" }}>
+        <div style={{ display:"flex",alignItems:"center",gap:7,marginBottom:4 }}>
+          {isEv?<EventMark color={col} size={8}/>:<div style={{ width:8,height:8,borderRadius:"50%",background:col,flexShrink:0 }}/>}
+          <span style={{ fontSize:10,color:C.hint }}>{isEv?"出来事":"シーン"}{x.end&&x.end!==x.date?`　〜 ${dateLabel(data,x.end)}`:""}</span>
+        </div>
+        <div style={{ fontFamily:C.display,fontSize:14,color:C.text,marginBottom:(chap||x.chars.length||(isEv&&x.item.notes))?5:0,wordBreak:"break-word" }}>{x.title}</div>
+        {isEv&&x.item.notes&&<div style={{ fontSize:11.5,color:C.sub,lineHeight:1.7,marginBottom:5,whiteSpace:"pre-wrap",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden" }}>{x.item.notes}</div>}
+        <div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>
+          {chap&&<Tag label={chap.title||"（無題）"}/>}
+          {ageTags(x).map(({ch,age})=><Tag key={ch.id} label={age!=null?`${charName(ch)} ${age}歳`:charName(ch)} color={ch.imageColor}/>)}
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div style={{ flex:1,overflowY:"auto",padding:16 }}>
-      <div style={{ fontFamily:C.display,fontSize:15,color:C.text,marginBottom:14 }}>年表</div>
-      {groups.length===0?<div style={{ textAlign:"center",padding:"40px 0",color:C.hint,fontSize:13 }}>日付が入ったシーンがここに並びます</div>:
-      groups.map((g,gi)=>(
-        <div key={g.key+gi} style={{ display:"flex",gap:12,marginBottom:10 }}>
-          <div style={{ display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,paddingTop:4 }}>
-            <div style={{ width:g.items.length>1?11:8,height:g.items.length>1?11:8,borderRadius:"50%",background:C.accent,flexShrink:0,border:g.items.length>1?`2px solid ${C.bg}`:"none",boxShadow:g.items.length>1?`0 0 0 1.5px ${C.accent}`:"none" }}/>
-            {gi<groups.length-1&&<div style={{ width:1,flex:1,background:C.border,marginTop:4 }}/>}
+      <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:10 }}>
+        <span style={{ fontFamily:C.display,fontSize:15,color:C.text,marginRight:"auto" }}>年表</span>
+        <button onClick={()=>setFilterOpen(v=>!v)} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:20,border:`0.5px solid ${nFilters?C.accent:C.border}`,background:nFilters?C.accent+"14":"transparent",color:nFilters?C.accent:C.sub,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="filter" s={12} c={nFilters?C.accent:C.sub}/>絞り込み{nFilters?` ${nFilters}`:""}</button>
+        <button onClick={onAddEvent} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:20,border:`0.5px solid ${C.hint}`,background:"transparent",color:C.text,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="plus" s={12} c={C.text}/>出来事</button>
+      </div>
+      <div style={{ display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:2 }}>
+        {chip("scene","シーン",<div style={{ width:7,height:7,borderRadius:"50%",background:C.accent }}/>)}
+        {chip("event","出来事",<EventMark color={C.danger} size={7}/>)}
+        {chip("life","誕生・死去",<div style={{ width:7,height:7,borderRadius:"50%",border:`1.5px solid ${C.sub}` }}/>)}
+      </div>
+      {filterOpen&&(
+        <div style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,padding:"12px 12px 2px",marginBottom:14 }}>
+          <Sel label="人物（その人が関わるものだけ）" value={charId} onChange={setCharId} options={data.characters.map(c=>({value:c.id,label:charName(c)}))}/>
+          <Sel label="章（その章のシーンだけ）" value={chapterId} onChange={setChapterId} options={data.chapters.map(c=>({value:c.id,label:c.title||"（無題）"}))}/>
+          <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}>
+            <DateInp cal={data.calendar} label="この日から" value={from} onChange={setFrom}/>
+            <DateInp cal={data.calendar} label="この日まで" value={to} onChange={setTo}/>
           </div>
+          {nFilters>0&&<div style={{ textAlign:"right",marginBottom:10 }}><Btn small variant="ghost" onClick={()=>{ setCharId(""); setChapterId(""); setFrom(""); setTo(""); }}>条件をクリア</Btn></div>}
+        </div>
+      )}
+      {focus&&(
+        <div style={{ display:"flex",alignItems:"center",gap:10,background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,padding:"10px 12px",marginBottom:14 }}>
+          <FamAvatar ch={focus} size={34}/>
           <div style={{ flex:1,minWidth:0 }}>
-            <div style={{ display:"flex",alignItems:"baseline",gap:7,marginBottom:5 }}>
-              <span style={{ fontSize:11.5,color:C.sub,fontWeight:600 }}>{dateLabel(data,g.key)}</span>
-              {g.items.length>1&&<span style={{ fontSize:10,color:C.accent,border:`0.5px solid ${C.accent}`,borderRadius:20,padding:"0 7px" }}>同日 {g.items.length}件</span>}
-            </div>
-            <div style={{ display:"flex",flexDirection:"column",gap:6,borderLeft:g.items.length>1?`2px solid ${C.border}`:"none",paddingLeft:g.items.length>1?10:0 }}>
-              {g.items.map(sc=>{ const chap=data.chapters.find(c=>c.id===sc.relatedChapterId); const chars=sc.relatedCharacters.map(id=>data.characters.find(c=>c.id===id)).filter(Boolean); return (
-                <div key={sc.id} style={{ background:C.surface,borderRadius:11,padding:"10px 12px",border:`0.5px solid ${C.border}` }}>
-                  {sc.endDate&&sc.endDate!==sc.startDate&&<div style={{ fontSize:10,color:C.hint,marginBottom:2 }}>→ {dateLabel(data,sc.endDate)}</div>}
-                  <div style={{ fontFamily:C.display,fontSize:14,color:C.text,marginBottom:5 }}>{sc.title||"（無題）"}</div>
-                  <div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{chap&&<Tag label={chap.title||"（無題）"}/>}{chars.map(ch=><Tag key={ch.id} label={charName(ch)} color={ch.imageColor}/>)}</div>
-                </div>
-              ); })}
-            </div>
+            <div style={{ fontFamily:C.display,fontSize:14,color:C.text }}>{charName(focus)}の年表</div>
+            <div style={{ fontSize:11,color:C.hint }}>{[focus.birthday&&`${dateLabel(data,focus.birthday)} 生`,ageText(data,focus)].filter(Boolean).join("・")||"誕生日を入れると、各出来事での年齢が出ます"}</div>
           </div>
         </div>
-      ))}
+      )}
+      {entries.length===0
+        ? <div style={{ textAlign:"center",padding:"40px 10px",color:C.hint,fontSize:13,lineHeight:1.9,whiteSpace:"pre-line" }}>{nFilters||!kinds.scene||!kinds.event?"条件に合う項目がありません":"日付が入ったシーンや出来事がここに並びます。\n「＋出来事」から、シーン以外の出来事も置けます。"}</div>
+        : blocks.map((b,bi)=>(
+          <div key={"y"+bi+b.year} style={{ marginBottom:6 }}>
+            <div style={{ fontFamily:C.display,fontSize:13,color:C.text,padding:"4px 0 8px",borderBottom:`0.5px solid ${C.border}`,marginBottom:10 }}>{tlYearLabel(data,b.year)}</div>
+            {b.days.map((d,di)=>d.now?(
+              <div key={"now"+di} style={{ display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px" }}>
+                <div style={{ height:0,flex:1,borderTop:`1.5px dashed ${C.accent}` }}/>
+                <span style={{ fontSize:11,color:C.accent,fontWeight:600,whiteSpace:"nowrap" }}>いまここ（{dateLabel(data,data.nowDate)}）</span>
+                <div style={{ height:0,flex:1,borderTop:`1.5px dashed ${C.accent}` }}/>
+              </div>
+            ):(
+              <div key={d.date+di} style={{ display:"flex",gap:12,marginBottom:10 }}>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,paddingTop:5,width:10 }}>
+                  <div style={{ width:7,height:7,borderRadius:"50%",background:C.hint,flexShrink:0 }}/>
+                  {di<b.days.length-1&&!b.days[di+1].now&&<div style={{ width:1,flex:1,background:C.border,marginTop:4 }}/>}
+                </div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:11.5,color:C.sub,fontWeight:600,marginBottom:5 }}>{dateLabel(data,d.date)}</div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:6 }}>{d.items.map(card)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      {undated.length>0&&kinds.event&&!chapterId&&(
+        <div style={{ marginTop:18 }}>
+          <div style={{ fontSize:11,fontWeight:600,color:C.hint,marginBottom:8 }}>日付のない出来事</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:6 }}>{undated.filter(e=>!charId||(e.relatedCharacters||[]).includes(charId)).map(e=>card({ key:"u"+e.id,kind:"event",date:"",title:e.title||"（無題の出来事）",chars:e.relatedCharacters||[],item:e }))}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 人物ページ用：その人の年表（誕生・死去・関わったシーンと出来事）
+const CharTimeline = ({ data, char }) => {
+  const list=buildTimeline(data,{ charId:char.id, kinds:{scene:true,event:true,life:true} });
+  if(list.length===0) return null;
+  return (
+    <div style={{ padding:"6px 14px 8px" }}>
+      {list.map((x,i)=>{ const age=(x.kind==="birth")?null:tlAgesAt(data,[char.id],x.date)[0]; const col=x.kind==="event"?(x.item.color||EVENT_COLORS[0]):x.kind==="scene"?C.accent:(char.imageColor||C.hint); return (
+        <div key={x.key} style={{ display:"flex",gap:10,padding:"7px 0",borderBottom:i<list.length-1?`0.5px solid ${C.borderL}`:"none",alignItems:"flex-start" }}>
+          <div style={{ paddingTop:5 }}>{x.kind==="event"?<EventMark color={col} size={7}/>:<div style={{ width:7,height:7,borderRadius:"50%",background:x.kind==="death"?"transparent":col,border:`1.5px solid ${col}` }}/>}</div>
+          <div style={{ flex:1,minWidth:0 }}>
+            <div style={{ fontSize:10.5,color:C.hint }}>{dateLabel(data,x.date)}{age&&age.age!=null&&x.kind!=="death"?`　${age.age}歳`:""}</div>
+            <div style={{ fontSize:13,color:C.text,wordBreak:"break-word" }}>{x.kind==="birth"?"誕生":x.kind==="death"?x.title.replace(charName(char)+" ",""):x.title}</div>
+          </div>
+        </div>
+      ); })}
     </div>
   );
 };
@@ -1984,7 +2164,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const upd=useCallback(fn=>setData(p=>fn(p)),[setData]);
   const upsert=useCallback((key,item)=>upd(p=>{const l=[...p[key]];const i=l.findIndex(x=>x.id===item.id);if(i>=0)l[i]=item;else l.push(item);return{...p,[key]:l};}),[upd]);
   const setFamily=useCallback((fn,sortFn)=>upd(p=>({...p,family:fn?fn(p.family||[]):(p.family||[]),familySort:sortFn?sortFn(p.familySort||{}):(p.familySort||{})})),[upd]);
-  const del=useCallback((key,id)=>{upd(p=>{ const n={...p,[key]:p[key].filter(x=>x.id!==id)}; if(key==="characters"&&p.family){ n.family=p.family.filter(l=>l.a!==id&&l.b!==id); } return n; });setModal(null);if(key==="characters")setCharViewId(null);},[upd]);
+  const del=useCallback((key,id)=>{upd(p=>{ const n={...p,[key]:p[key].filter(x=>x.id!==id)}; if(key==="characters"&&p.family){ n.family=p.family.filter(l=>l.a!==id&&l.b!==id); } if(key==="characters"&&p.events){ n.events=p.events.map(e=>(e.relatedCharacters||[]).includes(id)?{...e,relatedCharacters:e.relatedCharacters.filter(x=>x!==id)}:e); } return n; });setModal(null);if(key==="characters")setCharViewId(null);},[upd]);
   const moveEntity=useCallback((key,idx,dir)=>upd(p=>{const items=[...p[key]];const ni=idx+dir;if(ni<0||ni>=items.length) return p;[items[idx],items[ni]]=[items[ni],items[idx]];return{...p,[key]:items};}),[upd]);
   const setLayout=(v)=>{ setCharLayout(v); localStorage.setItem("tl_charLayout",v); };
 
@@ -1998,6 +2178,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     if(data.locations.length){ md+=`---\n\n## 場所\n\n`; data.locations.forEach(l=>{ md+=`### ${l.name||"（無名）"}\n\n`; if(l.description) md+=`${l.description}\n\n`; if(l.notes) md+=`${l.notes}\n\n`; }); }
     if(data.terms.length){ md+=`---\n\n## 用語集\n\n`; data.terms.forEach(t=>{ md+=`### ${t.name||"（無名）"}\n\n`; if(t.description) md+=`${t.description}\n\n`; }); }
     if(data.chapters.length){ md+=`---\n\n## 章構成\n\n`; data.chapters.forEach((ch,idx)=>{ md+=`### ${ch.title||`第${idx+1}章`}\n\n`; const sc=ch.relatedScenes.map(id=>data.scenes.find(s=>s.id===id)).filter(Boolean); if(sc.length) md+=`**シーン:** ${sc.map(s=>s.title||"（無題）").join("、")}\n\n`; if(ch.notes) md+=`${ch.notes}\n\n`; }); }
+    if((data.events||[]).length){ md+=`---\n\n## 出来事\n\n`; [...data.events].sort((a,b)=>(dayIndex(data,a.startDate)??Infinity)-(dayIndex(data,b.startDate)??Infinity)).forEach(e=>{ md+=`### ${e.title||"（無題の出来事）"}\n\n`; const l=[]; if(e.startDate) l.push(`**日付:** ${dateLabel(data,e.startDate)}${e.endDate&&e.endDate!==e.startDate?` 〜 ${dateLabel(data,e.endDate)}`:""}`); const cs=(e.relatedCharacters||[]).map(id=>data.characters.find(c=>c.id===id)).filter(Boolean).map(charName); if(cs.length) l.push(`**関わる人物:** ${cs.join("、")}`); if(l.length) md+=l.join("  \n")+"\n\n"; if(e.notes) md+=`${e.notes}\n\n`; }); }
     if(data.scenes.length){ md+=`---\n\n## シーン\n\n`; data.scenes.forEach(s=>{ md+=`### ${s.title||"（無題）"}\n\n`; const info=[]; if(s.startDate){let d=s.startDate;if(s.endDate&&s.endDate!==s.startDate)d+=` → ${s.endDate}`;info.push(`**日時:** ${d}`);} const chap=data.chapters.find(c=>c.id===s.relatedChapterId);if(chap) info.push(`**章:** ${chap.title||"（無題）"}`); const loc=data.locations.find(l=>l.id===s.relatedLocationId);if(loc) info.push(`**場所:** ${loc.name}`); const chars=s.relatedCharacters.map(id=>{const ch=data.characters.find(c=>c.id===id);return ch?charName(ch):null;}).filter(Boolean); if(chars.length) info.push(`**登場人物:** ${chars.join("、")}`); if(info.length) md+=info.join("  \n")+"\n\n"; if(s.notes) md+=`${s.notes}\n\n`; if(s.script) md+=`\`\`\`\n${s.script}\n\`\`\`\n\n`; }); }
     saveTextFile(`${data.storyTitle||"story"}.md`, md, "text/markdown;charset=utf-8").catch(e=>alertSaveFail(e));
   },[data]);
@@ -2240,7 +2421,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "characters": return charListEl;
       case "graph": return <RelationGraph data={data} onOpenChar={ch=>openChar(ch.id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})} onMoveNodes={moveNodes} onResetNodes={resetNodes}/>;
       case "family": return <FamilyTreeView data={data} isPremium={true} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
-      case "timeline": return <TimelineView data={data}/>;
+      case "timeline": return <TimelineView data={data} onEditScene={sc=>setModal({type:"scene",item:sc})} onEditEvent={ev=>setModal({type:"event",item:ev})} onAddEvent={()=>setModal({type:"event"})} onOpenChar={id=>openChar(id)}/>;
       case "scenes": return simpleList("scenes",{modal:"scene",renderName:s=>s.title||"（無題）",renderSubtitle:s=>{const ch=data.chapters.find(c=>c.id===s.relatedChapterId);return[dateLabel(data,s.startDate),ch?ch.title:null,s.script?`${countChars(s.script)}字`:null].filter(Boolean).join(" · ")||null;}});
       case "groups": return simpleList("groups",{modal:"group",renderName:g=>g.name||"（無名）",renderSubtitle:g=>`${g.relatedCharacters.length}名が所属`});
       case "locations": return simpleList("locations",{modal:"location",renderName:l=>l.name||"（無名）",renderSubtitle:l=>l.description?l.description.slice(0,36):null});
@@ -2272,11 +2453,12 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
 
   const renderModal=()=>{
     if(!modal) return null; const {type,item,preset}=modal;
-    const km={character:"characters",scene:"scenes",chapter:"chapters",group:"groups",location:"locations",term:"terms",gender:"genders",parameter:"parameters",abilityParam:"abilityParams",relationType:"relationTypes"};
+    const km={character:"characters",scene:"scenes",chapter:"chapters",group:"groups",location:"locations",term:"terms",gender:"genders",parameter:"parameters",abilityParam:"abilityParams",relationType:"relationTypes",event:"events"};
     const D=(item&&km[type])?()=>del(km[type],item.id):null;
     if(type==="relation") return <RelationEdit charId={item.charId} otherId={item.otherId} data={data} onSave={(a,b,ra,rb)=>{ saveRelationPair(a,b,ra,rb); setModal(null); }} onRemove={()=>{ removeRelationPair(item.charId,item.otherId); setModal(null); }} onClose={()=>setModal(null)}/>;
     if(type==="character") return <CharacterEdit char={item} data={data} onSave={saveChar} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="scene") return <SceneEdit scene={item} preset={preset} data={data} onSave={saveScene} onClose={()=>setModal(null)} onDelete={D}/>;
+    if(type==="event") return <EventEdit ev={item} data={data} onSave={e=>{upsert("events",e);setModal(null);}} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="chapter") return <ChapterEdit chapter={item} data={data} onSave={saveChapter} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="group") return <GroupEdit group={item} data={data} onSave={saveGroup} onClose={()=>setModal(null)} onDelete={D}/>;
     if(type==="location") return <SimpleEdit item={item} entityName="場所" data={data} onSave={l=>{upsert("locations",l);setModal(null);}} onClose={()=>setModal(null)} onDelete={D} fields={[{key:"name",label:"場所名",type:"text",placeholder:"例：王都カルナ"},{key:"description",label:"説明",type:"textarea",placeholder:"説明..."},{key:"notes",label:"備考",type:"textarea",placeholder:"メモ..."}]}/>;
