@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.11.0";
+const APP_VERSION = "0.12.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -658,7 +658,7 @@ const EMPTY_HINTS = {
   "章":"シーンをまとめる入れ物です。章から作ってもかまいません。",
   "用語":"魔法・組織名・造語など、あとで揺れやすい言葉を固定します。",
   "性別":"作品に合わせて自由に定義できます。色は相関図などに使われます。",
-  "自由項目":"「好きな食べ物」「口癖」など、人物に持たせたい欄を自分で作れます。",
+  "自由項目":"「好きな食べ物」「口癖」など、人物に持たせたい欄を自分で作れます。\n自由入力・長文（メモ）・選択式（1つ／複数）から選べます。\n「テンプレート」から、生い立ち・性格などをまとめて追加することもできます。",
   "能力の軸":"「攻撃力」「魔力」など、レーダーチャートの軸になる項目です。\n3つ以上でチャートが描かれます。",
   "関係の種類":"「親子」「宿敵」など、つながりの線につく名前と色です。",
 };
@@ -835,7 +835,8 @@ const CharacterEdit = ({ char: init, data, onSave, onClose, onDelete }) => {
       </div>
     )}
     <Sel label="性別" value={c.genderId} onChange={v=>u("genderId",v)} options={data.genders.map(g=>({value:g.id,label:g.name}))}/><Field label="イメージカラー"><div style={{ display:"flex",gap:10,alignItems:"center" }}><input type="color" value={c.imageColor} onChange={e=>u("imageColor",e.target.value)} style={{ width:36,height:36,border:`0.5px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2 }}/><span style={{ fontSize:12,color:C.sub }}>{c.imageColor}</span></div></Field>
-    <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} label="誕生日" value={c.birthday} onChange={v=>u("birthday",v)}/><DateInp cal={data.calendar} label="死亡日" value={c.deathDate} onChange={v=>u("deathDate",v)}/></div><Inp label="備考" value={c.notes} onChange={v=>u("notes",v)} rows={3} placeholder="メモ・設定など..."/></>}
+    <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} label="誕生日" value={c.birthday} onChange={v=>u("birthday",v)}/><DateInp cal={data.calendar} label="死亡日" value={c.deathDate} onChange={v=>u("deathDate",v)}/></div><Inp label="備考" value={c.notes} onChange={v=>u("notes",v)} rows={3} placeholder="メモ・設定など..."/>
+      {data.parameters.filter(p=>p.type==="long").map(p=>{ const ex=c.parameters.find(x=>x.paramId===p.id); return <Inp key={p.id} label={p.name||"（無名）"} value={ex?(ex.value||""):""} rows={4} onChange={v=>{const np=c.parameters.filter(x=>x.paramId!==p.id);if(v) np.push({paramId:p.id,value:v});u("parameters",np);}} placeholder={p.description||`${p.name||"この項目"}を書く...`}/>; })}</>}
     {tab==="links"&&<>
       <Field label="関連人物" mb={16}>        {c.relatedCharacters.map(rel=>{const ch=data.characters.find(x=>x.id===rel.charId);return ch?<CharRelCard key={rel.charId} rel={rel} character={ch} relationTypes={data.relationTypes} onUpdate={up=>u("relatedCharacters",c.relatedCharacters.map(r=>r.charId===up.charId?up:r))} onRemove={()=>u("relatedCharacters",c.relatedCharacters.filter(r=>r.charId!==rel.charId))}/>:null;})}
         <AdditiveLinker available={data.characters.filter(ch=>ch.id!==c.id&&!c.relatedCharacters.some(r=>r.charId===ch.id))} onAdd={id=>u("relatedCharacters",[...c.relatedCharacters,{charId:id,callName:"",calledName:"",relTypeId:"",direction:"both"}])} getLabel={charName} getColor={ch=>ch.imageColor}/></Field>
@@ -862,7 +863,7 @@ const CharacterEdit = ({ char: init, data, onSave, onClose, onDelete }) => {
         {availableParams.length>0&&<AdditiveLinker available={availableParams} onAdd={id=>setAbilityVal(id,50)} getLabel={p=>p.name||"（無名）"} placeholder="能力項目を追加"/>}
       </>}
     </>}
-    {tab==="params"&&(data.parameters.length===0?<div style={{ textAlign:"center",padding:"24px 0",color:C.hint,fontSize:13 }}>設定 → 自由項目 で欄を追加してください</div>:data.parameters.map(p=>{
+    {tab==="params"&&(data.parameters.filter(p=>p.type!=="long").length===0?<div style={{ textAlign:"center",padding:"24px 0",color:C.hint,fontSize:13 }}>{data.parameters.length?"長文の項目は「基本」タブにあります。":"設定 → 自由項目 で欄を追加してください"}</div>:data.parameters.filter(p=>p.type!=="long").map(p=>{
       const ex=c.parameters.find(x=>x.paramId===p.id);
       if(paramIsSelect(p)){
         const sel=paramValueIds(ex).filter(id=>paramOpts(p).some(o=>o.id===id));
@@ -952,6 +953,42 @@ const AbilityParamEdit = ({ param: init, onSave, onClose, onDelete }) => {
   </Modal>);
 };
 
+
+// 自由項目のテンプレート：よく使う長文の項目をまとめて追加する
+const PARAM_TEMPLATES = [
+  { name:"生い立ち", description:"生まれた場所、育った環境、これまでの歩み" },
+  { name:"性格", description:"長所・短所、癖、ふるまい" },
+  { name:"家庭環境", description:"家族構成、家族との関係" },
+  { name:"外見", description:"髪・目・体格・服装など" },
+  { name:"口調", description:"一人称、話し方、口癖" },
+  { name:"好きなもの・苦手なもの", description:"" },
+  { name:"秘密", description:"本人しか知らないこと、物語の伏線" },
+];
+const ParamTemplateButton = ({ data, onAdd }) => {
+  const [open,setOpen]=useState(false);
+  const exists=(n)=>data.parameters.some(p=>(p.name||"").trim()===n);
+  const [on,setOn]=useState({});
+  const start=()=>{ const o={}; PARAM_TEMPLATES.forEach(t=>{ o[t.name]=!exists(t.name); }); setOn(o); setOpen(true); };
+  const n=PARAM_TEMPLATES.filter(t=>on[t.name]&&!exists(t.name)).length;
+  const add=()=>{ onAdd(PARAM_TEMPLATES.filter(t=>on[t.name]&&!exists(t.name)).map(t=>({ id:uid(),name:t.name,description:t.description,type:"long",options:[] }))); setOpen(false); };
+  return (<>
+    <button onClick={start} style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 11px",background:"transparent",color:C.sub,border:`0.5px solid ${C.border}`,borderRadius:20,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}><Ico n="doc" s={12} c={C.sub}/>テンプレート</button>
+    {open&&(
+      <Modal compact title="テンプレートから追加" onClose={()=>setOpen(false)} footer={<><Btn small variant="ghost" onClick={()=>setOpen(false)}>やめる</Btn><div style={{ flex:1 }}/><Btn small variant="primary" onClick={add}>{n}件を追加</Btn></>}>
+        <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:10 }}>「長文（メモ）」の項目として追加します。人物の編集画面の「基本」タブで書けて、人物ページでは見出し付きで並びます。名前の変更や削除は、あとから自由にできます。</div>
+        {PARAM_TEMPLATES.map(t=>{ const ex=exists(t.name); const v=!!on[t.name]&&!ex; return (
+          <button key={t.name} onClick={()=>{ if(!ex) setOn(o=>({...o,[t.name]:!o[t.name]})); }} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 2px",background:"none",border:"none",borderBottom:`0.5px solid ${C.borderL}`,cursor:ex?"default":"pointer",fontFamily:"inherit",textAlign:"left",opacity:ex?0.5:1 }}>
+            <div style={{ width:22,height:22,borderRadius:6,border:`1.5px solid ${v?C.accent:C.border}`,background:v?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{v&&<Ico n="check" s={13} c={C.accentFg}/>}</div>
+            <div style={{ flex:1,minWidth:0 }}>
+              <div style={{ fontSize:13,color:C.text }}>{t.name}</div>
+              {(ex||t.description)&&<div style={{ fontSize:10.5,color:C.hint }}>{ex?"追加済み":t.description}</div>}
+            </div>
+          </button>
+        ); })}
+      </Modal>
+    )}
+  </>);
+};
 const ParameterEdit = ({ param: init, onSave, onClose, onDelete }) => {
   const [p,setP]=useState(()=>({id:uid(),name:"",description:"",type:"text",options:[],...(init||{})}));
   const u=(k,v)=>setP(prev=>({...prev,[k]:v}));
@@ -960,7 +997,7 @@ const ParameterEdit = ({ param: init, onSave, onClose, onDelete }) => {
   const addOpt=()=>u("options",[...opts,{id:uid(),label:""}]);
   const delOpt=id=>u("options",opts.filter(o=>o.id!==id));
   const moveOpt=(i,d)=>{ const n=[...opts]; const t=i+d; if(t<0||t>=n.length) return; [n[i],n[t]]=[n[t],n[i]]; u("options",n); };
-  const TYPES=[{v:"text",label:"自由入力",desc:"文章や数字を自由に書けます"},{v:"select",label:"選択式（1つ）",desc:"用意した選択肢から1つ選びます"},{v:"multi",label:"選択式（複数）",desc:"選択肢をいくつでも選べます"}];
+  const TYPES=[{v:"text",label:"自由入力",desc:"文章や数字を自由に書けます"},{v:"select",label:"選択式（1つ）",desc:"用意した選択肢から1つ選びます"},{v:"long",label:"長文（メモ）",desc:"生い立ちや性格など、長めの文章を書けます。人物ページでは見出し付きで並びます"},{v:"multi",label:"選択式（複数）",desc:"選択肢をいくつでも選べます"}];
   const save=()=>onSave({...p,options:opts.filter(o=>(o.label||"").trim()).map(o=>({...o,label:o.label.trim()}))});
   return (<Modal title={p.name||"新しい自由項目"} onClose={onClose} footer={<>{init?<Btn variant="danger" icon="trash" small onClick={onDelete}>削除</Btn>:null}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={save}>保存</Btn></>}>
     <Inp label="項目名" value={p.name} onChange={v=>u("name",v)} placeholder="例：属性、種族、好きな食べ物..."/>
@@ -1027,7 +1064,9 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
   const age = ageInfo?ageInfo.age:null;
   const groups = char.relatedGroups.map(r=>({ ...r, g:data.groups.find(x=>x.id===r.groupId) })).filter(x=>x.g);
   const terms = char.relatedTerms.map(id=>data.terms.find(t=>t.id===id)).filter(Boolean);
-  const params = data.parameters.map(p=>({ p, v:paramDisplay(p,char.parameters.find(x=>x.paramId===p.id)) })).filter(x=>x.v);
+  const allParams = data.parameters.map(p=>({ p, v:paramDisplay(p,char.parameters.find(x=>x.paramId===p.id)) })).filter(x=>x.v);
+  const params = allParams.filter(x=>x.p.type!=="long");
+  const memos = allParams.filter(x=>x.p.type==="long");
   const rels = char.relatedCharacters.map(r=>({ ...r, other:data.characters.find(c=>c.id===r.charId) })).filter(x=>x.other);
   const scenes = data.scenes.filter(s=>(s.relatedCharacters||[]).includes(char.id));
   const furi = charFuri(char);
@@ -1086,6 +1125,12 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
             </VSection>
           )}
 
+          {memos.length>0&&<VSection title="プロフィール" accent={acc}>
+            {memos.map((x,i)=>(<div key={x.p.id} style={{ padding:"12px 14px",borderBottom:i<memos.length-1?`0.5px solid ${C.borderL}`:"none" }}>
+              <div style={{ fontSize:11.5,fontWeight:600,color:acc,marginBottom:5 }}>{x.p.name}</div>
+              <div style={{ fontSize:13,color:C.text,lineHeight:1.9,whiteSpace:"pre-wrap",wordBreak:"break-word" }}>{x.v}</div>
+            </div>))}
+          </VSection>}
           {params.length>0&&<VSection title="自由項目" accent={acc}><InfoRows rows={params.map(x=>[x.p.name,x.v])}/></VSection>}
 
           {rels.length>0&&(
@@ -1135,7 +1180,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
             </VSection>
           )}
 
-          {basics.length===0&&rels.length===0&&groups.length===0&&params.length===0&&abParams.length===0&&terms.length===0&&scenes.length===0&&(
+          {basics.length===0&&rels.length===0&&groups.length===0&&params.length===0&&memos.length===0&&abParams.length===0&&terms.length===0&&scenes.length===0&&(
             <div style={{ textAlign:"center",padding:"36px 24px",color:C.hint }}>
               <div style={{ fontSize:13,color:C.text,fontWeight:600,marginBottom:6 }}>まだ名前だけの人物です</div>
               <div style={{ fontSize:12,lineHeight:1.8,marginBottom:16,whiteSpace:"pre-line" }}>誕生日や備考、関係を書き足すと{"\n"}このページに並んでいきます。</div>
@@ -1948,7 +1993,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const exportMarkdown=useCallback(()=>{
     let md=`# ${data.storyTitle||"ストーリー"}\n\n`;
     if(data.storySynopsis) md+=`## あらすじ\n\n${data.storySynopsis}\n\n`;
-    if(data.characters.length){ md+=`---\n\n## 登場人物\n\n`; data.characters.forEach(c=>{ md+=`### ${charName(c)}\n\n`; const lines=[]; const g=data.genders.find(x=>x.id===c.genderId); if(g) lines.push(`**性別:** ${g.name}`); if(c.birthday) lines.push(`**誕生日:** ${c.birthday}`); if(c.deathDate) lines.push(`**死亡日:** ${c.deathDate}`); const grps=c.relatedGroups.map(r=>{const grp=data.groups.find(x=>x.id===r.groupId);return grp?(r.position?`${grp.name}（${r.position}）`:grp.name):null;}).filter(Boolean); if(grps.length) lines.push(`**所属:** ${grps.join("、")}`); const rels=c.relatedCharacters.map(r=>{const ch=data.characters.find(x=>x.id===r.charId);if(!ch) return null;let s=charName(ch);const sub=[r.callName&&`${r.callName}と呼ぶ`,r.calledName&&`${r.calledName}と呼ばれる`].filter(Boolean);if(sub.length) s+=`（${sub.join("・")}）`;return s;}).filter(Boolean); if(rels.length) lines.push(`**関連人物:** ${rels.join("、")}`); data.parameters.forEach(p=>{const pv=paramDisplay(p,c.parameters.find(x=>x.paramId===p.id));if(pv) lines.push(`**${p.name}:** ${pv}`);}); const ab=c.abilities.map(a=>{const ap=data.abilityParams.find(x=>x.id===a.paramId);return ap?`${ap.name}: ${a.value}`:null;}).filter(Boolean); if(ab.length) lines.push(`**能力値:** ${ab.join(" / ")}`); if(lines.length) md+=lines.join("  \n")+"\n\n"; if(c.notes) md+=`${c.notes}\n\n`; }); }
+    if(data.characters.length){ md+=`---\n\n## 登場人物\n\n`; data.characters.forEach(c=>{ md+=`### ${charName(c)}\n\n`; const lines=[]; const g=data.genders.find(x=>x.id===c.genderId); if(g) lines.push(`**性別:** ${g.name}`); if(c.birthday) lines.push(`**誕生日:** ${c.birthday}`); if(c.deathDate) lines.push(`**死亡日:** ${c.deathDate}`); const grps=c.relatedGroups.map(r=>{const grp=data.groups.find(x=>x.id===r.groupId);return grp?(r.position?`${grp.name}（${r.position}）`:grp.name):null;}).filter(Boolean); if(grps.length) lines.push(`**所属:** ${grps.join("、")}`); const rels=c.relatedCharacters.map(r=>{const ch=data.characters.find(x=>x.id===r.charId);if(!ch) return null;let s=charName(ch);const sub=[r.callName&&`${r.callName}と呼ぶ`,r.calledName&&`${r.calledName}と呼ばれる`].filter(Boolean);if(sub.length) s+=`（${sub.join("・")}）`;return s;}).filter(Boolean); if(rels.length) lines.push(`**関連人物:** ${rels.join("、")}`); data.parameters.forEach(p=>{ if(p.type==="long") return; const pv=paramDisplay(p,c.parameters.find(x=>x.paramId===p.id));if(pv) lines.push(`**${p.name}:** ${pv}`);}); const ab=c.abilities.map(a=>{const ap=data.abilityParams.find(x=>x.id===a.paramId);return ap?`${ap.name}: ${a.value}`:null;}).filter(Boolean); if(ab.length) lines.push(`**能力値:** ${ab.join(" / ")}`); if(lines.length) md+=lines.join("  \n")+"\n\n"; data.parameters.forEach(p=>{ if(p.type!=="long") return; const pv=paramDisplay(p,c.parameters.find(x=>x.paramId===p.id)); if(pv) md+=`#### ${p.name}\n\n${pv}\n\n`; }); if(c.notes) md+=`${c.notes}\n\n`; }); }
     if(data.groups.length){ md+=`---\n\n## 集団\n\n`; data.groups.forEach(g=>{ md+=`### ${g.name||"（無名）"}\n\n`; if(g.description) md+=`${g.description}\n\n`; const m=g.relatedCharacters.map(id=>{const ch=data.characters.find(c=>c.id===id);return ch?charName(ch):null;}).filter(Boolean); if(m.length) md+=`**メンバー:** ${m.join("、")}\n\n`; if(g.notes) md+=`${g.notes}\n\n`; }); }
     if(data.locations.length){ md+=`---\n\n## 場所\n\n`; data.locations.forEach(l=>{ md+=`### ${l.name||"（無名）"}\n\n`; if(l.description) md+=`${l.description}\n\n`; if(l.notes) md+=`${l.notes}\n\n`; }); }
     if(data.terms.length){ md+=`---\n\n## 用語集\n\n`; data.terms.forEach(t=>{ md+=`### ${t.name||"（無名）"}\n\n`; if(t.description) md+=`${t.description}\n\n`; }); }
@@ -2186,7 +2231,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
 
   const charListEl = <EntityList title="人物" icon="person" iconColor={SECTIONS.characters.color} items={shownChars} onAdd={()=>setModal({type:"character"})} onEdit={it=>openChar(it.id)} onDelete={id=>del("characters",id)} renderName={charName} renderImage={c=>c.image||null} renderSubtitle={c=>{const g=data.genders.find(x=>x.id===c.genderId);return[g?g.name:null,ageText(data,c),c.birthday?`${dateLabel(data,c.birthday)}生`:null].filter(Boolean).join(" · ")||null;}} renderTags={c=>c.relatedGroups.slice(0,2).map(r=>{const g=data.groups.find(x=>x.id===r.groupId);return g?{label:r.position?`${g.name}（${r.position}）`:g.name}:null;}).filter(Boolean)} onMoveUp={canReorder?(i=>moveEntity("characters",i,-1)):undefined} onMoveDown={canReorder?(i=>moveEntity("characters",i,1)):undefined} headerExtra={layoutToggle} subHeader={charSortBar} emptyEl={charFilterActive?charFilterEmpty:undefined} body={charLayout==="grid"?<CharacterGrid chars={shownChars} data={data} onOpen={c=>openChar(c.id)}/>:charLayout==="face"?<FaceGrid chars={shownChars} onOpen={c=>openChar(c.id)}/>:undefined}/>;
 
-  const simpleList=(key,extra)=>{ const sc=SECTIONS[key]; return <EntityList title={sc.label} icon={sc.icon} iconColor={sc.color} items={data[key]} onAdd={()=>setModal({type:extra.modal})} onEdit={it=>setModal({type:extra.modal,item:it})} onDelete={extra.onDelete||(id=>del(key,id))} renderName={extra.renderName} renderSubtitle={extra.renderSubtitle} onMoveUp={i=>moveEntity(key,i,-1)} onMoveDown={i=>moveEntity(key,i,1)}/>; };
+  const simpleList=(key,extra)=>{ const sc=SECTIONS[key]; return <EntityList title={sc.label} icon={sc.icon} iconColor={sc.color} items={data[key]} onAdd={()=>setModal({type:extra.modal})} onEdit={it=>setModal({type:extra.modal,item:it})} onDelete={extra.onDelete||(id=>del(key,id))} renderName={extra.renderName} renderSubtitle={extra.renderSubtitle} onMoveUp={i=>moveEntity(key,i,-1)} onMoveDown={i=>moveEntity(key,i,1)} headerExtra={extra.headerExtra}/>; };
 
   const viewEl=(key)=>{
     switch(key){
@@ -2201,7 +2246,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "locations": return simpleList("locations",{modal:"location",renderName:l=>l.name||"（無名）",renderSubtitle:l=>l.description?l.description.slice(0,36):null});
       case "terms": return simpleList("terms",{modal:"term",renderName:t=>t.name||"（無名）",renderSubtitle:t=>t.description?t.description.slice(0,36):null});
       case "genders": return simpleList("genders",{modal:"gender",renderName:g=>g.name||"（無名）",renderSubtitle:g=>g.color});
-      case "parameters": return simpleList("parameters",{modal:"parameter",renderName:p=>p.name||"（無名）",renderSubtitle:p=>{ const t=p.type==="select"?`選択式・${paramOpts(p).length}個の選択肢`:p.type==="multi"?`選択式（複数）・${paramOpts(p).length}個の選択肢`:"自由入力"; return p.description?`${t} · ${p.description.slice(0,24)}`:t; }});
+      case "parameters": return simpleList("parameters",{modal:"parameter",headerExtra:<ParamTemplateButton data={data} onAdd={list=>upd(p=>({...p,parameters:[...p.parameters,...list]}))}/>,renderName:p=>p.name||"（無名）",renderSubtitle:p=>{ const t=p.type==="long"?"長文（メモ）":p.type==="select"?`選択式・${paramOpts(p).length}個の選択肢`:p.type==="multi"?`選択式（複数）・${paramOpts(p).length}個の選択肢`:"自由入力"; return p.description?`${t} · ${p.description.slice(0,24)}`:t; }});
       case "abilityParams": return simpleList("abilityParams",{modal:"abilityParam",renderName:p=>p.name||"（無名）",renderSubtitle:()=>"能力値チャートの軸",onDelete:id=>{const p=data.abilityParams.find(x=>x.id===id);setConfirmBox({title:"能力の軸を削除",body:`「${p?p.name:""}」を削除します。全人物のこの項目の値も消えます。`,run:()=>del("abilityParams",id)});}});
       case "relationTypes": return simpleList("relationTypes",{modal:"relationType",renderName:t=>t.name||"（無名）",renderSubtitle:()=>"つながりの線につく名前と色",onDelete:id=>{const t=data.relationTypes.find(x=>x.id===id);setConfirmBox({title:"関係の種類を削除",body:`「${t?t.name:""}」を削除します。`,run:()=>del("relationTypes",id)});}});
       case "calendar": return <CalendarSettings data={data} upd={upd}/>;
