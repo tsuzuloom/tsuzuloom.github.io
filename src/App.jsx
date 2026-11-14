@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.10.0";
+const APP_VERSION = "0.10.1";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -308,7 +308,7 @@ const parseHash = () => {
   const h = (window.location.hash||"").replace(/^#\/?/,"");
   const p = h.split("/").filter(Boolean);
   if(p[0]==="s"&&p[1]) return { screen:"editor", storyId:p[1], section:p[2]||null, charId:(p[2]==="characters"&&p[3])?p[3]:null };
-  if(p[0]==="settings") return { screen:"settings", storyId:null, section:null, charId:null };
+  if(p[0]==="settings") return { screen:"settings", storyId:null, section:p[1]||null, charId:null };
   if(p[0]==="ideas")    return { screen:"ideas",    storyId:null, section:null, charId:null };
   if(p[0]==="trash")    return { screen:"trash",    storyId:null, section:null, charId:null };
   return { screen:"list", storyId:null, section:null, charId:null };
@@ -320,7 +320,7 @@ const buildHash = (r) => {
     if(r.section==="characters"&&r.charId) s+=`/${r.charId}`;
     return s;
   }
-  if(r.screen==="settings") return "#/settings";
+  if(r.screen==="settings") return r.section ? `#/settings/${r.section}` : "#/settings";
   if(r.screen==="ideas")    return "#/ideas";
   if(r.screen==="trash")    return "#/trash";
   return "#/";
@@ -382,6 +382,8 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     doc:<><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></>,
     shield:<><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10c-4-1.5-7-5.5-7-10V6z"/></>,
     monitor:<><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></>,
+    palette:<><path d="M12 3a9 9 0 100 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 005-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10.5" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/></>,
+    help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 015 .9c0 1.7-2.5 2.2-2.5 3.8"/><path d="M12 17.2v.1"/></>,
     sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
     grid:<><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
     filter:<><path d="M4 5.5h16l-6.2 7.3V19l-3.6 1.8v-8L4 5.5z"/></>,
@@ -2665,7 +2667,7 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
+function SettingsScreen({ page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
   const [premOpen,setPremOpen]=useState(false);
@@ -2692,97 +2694,153 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, fontKey, isPremium, o
     setTimeout(()=>setFilesMsg(`${data.length}件の作品を「ファイル」に保存しました。`),1600);
   };
   const native=isNativeApp();
+  const PAGES={ account:"アカウント", display:"表示", icon:"アプリのアイコン", data:"データ", support:"ヘルプとサポート", about:"このアプリについて" };
+  // アイコンはiPhoneアプリだけ。Web版でURLから来たときはトップに戻す
+  const cur = (page&&PAGES[page]&&(page!=="icon"||native)) ? page : null;
+  const go = (k)=>onPage(k);
+  const themeLabel = (THEMES[theme]&&!(THEMES[theme].premium&&!isPremium)) ? THEMES[theme].label : THEMES.mono.label;
+  const fontLabel  = (FONTS[fontKey]&&!(FONTS[fontKey].premium&&!isPremium)) ? FONTS[fontKey].label : FONTS.sans.label;
+  const iconLabel  = ((ICONS.find(x=>x.key===(iconName||null))||ICONS[0]).label);
+  const darkRow = (last)=> <SetRow icon={dark?"moon":"sun"} label="ダークモード" onClick={()=>onDark(!dark)} right={<Toggle on={dark}/>} last={last}/>;
+  const note = (t)=> <div style={{ fontSize:11,color:C.hint,lineHeight:1.85,padding:"0 4px",margin:"-14px 0 22px" }}>{t}</div>;
+
+  const top = (<>
+    <SetGroup>
+      <SetRow icon="person" label="アカウント" sub={email} onClick={()=>go("account")} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="palette" label="表示" sub={`${themeLabel}・${fontLabel}`} onClick={()=>go("display")}/>
+      {darkRow(!native)}
+      {native&&<SetRow icon="grid" label="アプリのアイコン" sub={iconLabel} onClick={()=>go("icon")} last/>}
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="save" label="データ" sub="ゴミ箱・ファイルへの保存" onClick={()=>go("data")} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="help" label="ヘルプとサポート" sub="使い方・質問・ご要望" onClick={()=>go("support")}/>
+      <SetRow icon="info" label="このアプリについて" sub="規約・プライバシー・アップデート情報" onClick={()=>go("about")} last/>
+    </SetGroup>
+    <div style={{ textAlign:"center",marginTop:8,opacity:0.55 }}>
+      <div style={{ fontSize:12,fontWeight:600,color:C.sub,letterSpacing:"-0.2px" }}>Tsuzu Loom</div>
+      <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}（ベータ）</div>
+    </div>
+  </>);
+
+  const account = (<>
+    <SetGroup>
+      <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
+      <SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="mail" label="メールアドレスを変更" onClick={()=>setMailOpen(true)}/>
+      <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
+    </SetGroup>
+    {note("作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。")}
+    <SetGroup>
+      <SetRow icon="trash" label="アカウントを削除" danger onClick={()=>setDelOpen(true)} right={null} last/>
+    </SetGroup>
+    {note("アカウントと、すべての作品・人物・画像が完全に削除されます。元には戻せません。")}
+  </>);
+
+  const display = (<>
+    <SetGroup title="テーマ">
+      <div style={{ padding:"14px" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+          {Object.entries(THEMES).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
+            <button key={key} onClick={()=>locked?setPremOpen(true):onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
+              <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
+              <span style={{ fontSize:12.5,fontWeight:on?600:400,color:C.text }}>{t.label}</span>
+              <div style={{ marginLeft:"auto",display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
+            </button>
+          ); })}
+        </div>
+      </div>
+    </SetGroup>
+    <SetGroup title="本文の書体">
+      <div style={{ padding:"14px" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+          {Object.entries(FONTS).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
+            <button key={key} onClick={()=>{ if(locked){ setPremOpen(true); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
+              <span style={{ fontSize:15,color:C.text,fontFamily:f.stack }}>物語を綴る</span>
+              <span style={{ fontSize:10.5,color:C.sub }}>{f.label}</span>
+              <div style={{ position:"absolute",top:9,right:10,display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
+            </button>
+          ); })}
+        </div>
+      </div>
+    </SetGroup>
+    <SetGroup>
+      {darkRow(false)}
+      <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
+    </SetGroup>
+    {!isPremium&&note("鍵のついたテーマと書体は、プレミアムプランで使えるようになります。")}
+  </>);
+
+  const icon = (<>
+    <SetGroup>
+      <div style={{ padding:"16px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(64px,1fr))",gap:14 }}>
+        {ICONS.map(ic=>{ const locked=ic.key&&!isPremium; const on=(iconName||null)===ic.key; return (
+          <button key={ic.label} onClick={()=>pickIcon(ic.key)} style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0 }}>
+            <div style={{ position:"relative" }}>
+              <img src={`./icons/${ic.img}.png`} alt={ic.label} style={{ width:60,height:60,borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,opacity:locked?0.55:1,display:"block" }}/>
+              {locked&&<div style={{ position:"absolute",right:-4,bottom:-4,background:C.surface,borderRadius:10,padding:3,display:"flex",border:`0.5px solid ${C.border}` }}><Ico n="lock" s={11} c={C.hint}/></div>}
+            </div>
+            <span style={{ fontSize:10.5,color:on?C.accent:C.sub }}>{ic.label}</span>
+          </button>
+        ); })}
+      </div>
+    </SetGroup>
+    {note("アイコンを変えると、iPhoneから確認のお知らせが出ます。")}
+  </>);
+
+  const data = (<>
+    <SetGroup>
+      <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last/>
+    </SetGroup>
+    {native&&<SetGroup title="「ファイル」アプリ">
+      <SetRow icon="doc" label="iPhoneの「ファイル」にも保存" sub="ファイル › このiPhone内 › Tsuzu Loom に、作品ごとのファイルを自動で保存します" onClick={toggleFiles} right={<Toggle on={filesOn}/>} last={!filesOn}/>
+      {filesOn&&<SetRow icon="download" label="すべての作品を今すぐ保存" sub={filesMsg||undefined} onClick={saveAllToFiles} last/>}
+    </SetGroup>}
+    {note("作品ごとのバックアップ（JSON・Markdownの書き出し）は、各作品の「作品の設定」からできます。バックアップした作品の読み込みは、作品一覧からできます。")}
+  </>);
+
+  const support = (<>
+    <SetGroup>
+      <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
+      <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="mail" label="改善・ご要望を送る" sub={CONTACT_EMAIL} onClick={()=>openExternal("mailto:"+CONTACT_EMAIL+"?subject="+encodeURIComponent("Tsuzu Loom へのご意見（v"+APP_VERSION+"）"))}/>
+      <SetRow icon="chat" label="Discordコミュニティ" onClick={()=>openExternal(DISCORD_URL)} last={!native}/>
+      {native&&<SetRow icon="monitor" label="Webサイト版を開く" sub="パソコンからも同じデータを使えます" onClick={()=>openExternal(SITE_URL)} last/>}
+    </SetGroup>
+  </>);
+
+  const about = (<>
+    <SetGroup>
+      <SetRow icon="info" label="このアプリについて" sub="個人開発・データの扱い・料金について" onClick={()=>openExternal(DOCS_URL+"about.html")}/>
+      <SetRow icon="timeline" label="アップデート情報" onClick={()=>openExternal(DOCS_URL+"changelog.html")}/>
+      <SetRow icon="pin" label="今後の予定と不具合情報" onClick={()=>openExternal(DOCS_URL+"roadmap.html")} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="doc" label="利用規約" onClick={()=>openExternal(DOCS_URL+"terms.html")}/>
+      <SetRow icon="shield" label="プライバシーポリシー" onClick={()=>openExternal(DOCS_URL+"privacy.html")}/>
+      <SetRow icon="link" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
+    </SetGroup>
+    <SetGroup>
+      <SetRow icon="sparkle" label="バージョン" right={<span style={{ fontSize:12.5,color:C.sub }}>{APP_VERSION}（ベータ）</span>} last/>
+    </SetGroup>
+  </>);
+
+  const body = { account, display, icon, data, support, about }[cur] || top;
   return (
     <div style={{ height:"100%",display:"flex",flexDirection:"column" }}>
       <div style={{ display:"flex",alignItems:"center",gap:8,padding:"11px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0 }}>
-        <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="chevL" s={18} c={C.accent}/><span style={{ fontSize:12,color:C.accent }}>戻る</span></button>
-        <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>設定</span>
+        <button onClick={()=>cur?go(null):onBack()} style={{ background:"none",border:"none",cursor:"pointer",padding:"6px 8px",display:"flex",alignItems:"center",gap:3 }}><Ico n="chevL" s={18} c={C.accent}/><span style={{ fontSize:12,color:C.accent }}>{cur?"設定":"戻る"}</span></button>
+        <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>{cur?PAGES[cur]:"設定"}</span>
       </div>
-      <div style={{ flex:1,overflowY:"auto",padding:"16px 16px calc(24px + env(safe-area-inset-bottom,0px))" }}>
-        <div style={{ maxWidth:620,margin:"0 auto" }}>
-
-        <SetGroup title="アカウント">
-          <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
-          <SetRow icon="mail" label="メールアドレスを変更" onClick={()=>setMailOpen(true)}/>
-          <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
-        </SetGroup>
-        <div style={{ fontSize:11,color:C.hint,lineHeight:1.85,padding:"0 4px",margin:"-14px 0 22px" }}>作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。</div>
-
-        <SetGroup title={isPremium?"表示（プレミアム）":"表示"}>
-          <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
-            <div style={{ fontSize:12,color:C.sub,marginBottom:10 }}>テーマ</div>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-              {Object.entries(THEMES).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
-                <button key={key} onClick={()=>locked?setPremOpen(true):onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
-                  <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
-                  <span style={{ fontSize:12.5,fontWeight:on?600:400,color:C.text }}>{t.label}</span>
-                  <div style={{ marginLeft:"auto",display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
-                </button>
-              ); })}
-            </div>
-          </div>
-          <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
-            <div style={{ fontSize:12,color:C.sub,marginBottom:10 }}>本文の書体</div>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-              {Object.entries(FONTS).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
-                <button key={key} onClick={()=>{ if(locked){ setPremOpen(true); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
-                  <span style={{ fontSize:15,color:C.text,fontFamily:f.stack }}>物語を綴る</span>
-                  <span style={{ fontSize:10.5,color:C.sub }}>{f.label}</span>
-                  <div style={{ position:"absolute",top:9,right:10,display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
-                </button>
-              ); })}
-            </div>
-          </div>
-          <SetRow icon={dark?"moon":"sun"} label="ダークモード" onClick={()=>onDark(!dark)} right={<Toggle on={dark}/>}/>
-          <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
-        </SetGroup>
-
-        {native&&<SetGroup title="アプリのアイコン">
-          <div style={{ padding:"14px",display:"flex",gap:10,overflowX:"auto" }}>
-            {ICONS.map(ic=>{ const locked=ic.key&&!isPremium; const on=(iconName||null)===ic.key; return (
-              <button key={ic.label} onClick={()=>pickIcon(ic.key)} style={{ flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0 }}>
-                <div style={{ position:"relative" }}>
-                  <img src={`./icons/${ic.img}.png`} alt={ic.label} style={{ width:56,height:56,borderRadius:13,border:`2px solid ${on?C.accent:C.border}`,opacity:locked?0.55:1,display:"block" }}/>
-                  {locked&&<div style={{ position:"absolute",right:-4,bottom:-4,background:C.surface,borderRadius:10,padding:3,display:"flex",border:`0.5px solid ${C.border}` }}><Ico n="lock" s={11} c={C.hint}/></div>}
-                </div>
-                <span style={{ fontSize:10.5,color:on?C.accent:C.sub }}>{ic.label}</span>
-              </button>
-            ); })}
-          </div>
-        </SetGroup>}
-
-        <SetGroup title="データ">
-          <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last={!native}/>
-          {native&&<SetRow icon="doc" label="iPhoneの「ファイル」にも保存" sub="ファイル › このiPhone内 › Tsuzu Loom に、作品ごとのファイルを自動で保存します" onClick={toggleFiles} right={<Toggle on={filesOn}/>} last={!filesOn}/>}
-          {native&&filesOn&&<SetRow icon="download" label="すべての作品を今すぐ保存" sub={filesMsg||undefined} onClick={saveAllToFiles} last/>}
-        </SetGroup>
-
-        <SetGroup title="サポート">
-          <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
-          <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")}/>
-          <SetRow icon="mail" label="改善・ご要望を送る" sub={CONTACT_EMAIL} onClick={()=>openExternal("mailto:"+CONTACT_EMAIL+"?subject="+encodeURIComponent("Tsuzu Loom へのご意見（v"+APP_VERSION+"）"))}/>
-          <SetRow icon="chat" label="Discordコミュニティ" onClick={()=>openExternal(DISCORD_URL)} last={!native}/>
-          {native&&<SetRow icon="monitor" label="Webサイト版を開く" sub="パソコンからも同じデータを使えます" onClick={()=>openExternal(SITE_URL)} last/>}
-        </SetGroup>
-
-        <SetGroup title="このアプリについて">
-          <SetRow icon="info" label="このアプリについて" sub="個人開発・データの扱い・料金について" onClick={()=>openExternal(DOCS_URL+"about.html")}/>
-          <SetRow icon="timeline" label="アップデート情報" onClick={()=>openExternal(DOCS_URL+"changelog.html")}/>
-          <SetRow icon="pin" label="今後の予定と不具合情報" onClick={()=>openExternal(DOCS_URL+"roadmap.html")}/>
-          <SetRow icon="doc" label="利用規約" onClick={()=>openExternal(DOCS_URL+"terms.html")}/>
-          <SetRow icon="shield" label="プライバシーポリシー" onClick={()=>openExternal(DOCS_URL+"privacy.html")}/>
-          <SetRow icon="link" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
-        </SetGroup>
-
-        <SetGroup>
-          <SetRow icon="trash" label="アカウントを削除" danger onClick={()=>setDelOpen(true)} right={null} last/>
-        </SetGroup>
-
-        <div style={{ textAlign:"center",marginTop:8,opacity:0.55 }}>
-          <div style={{ fontSize:12,fontWeight:600,color:C.sub,letterSpacing:"-0.2px" }}>Tsuzu Loom</div>
-          <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}（ベータ）</div>
-        </div>
-        </div>
+      <div key={cur||"top"} style={{ flex:1,overflowY:"auto",padding:"16px 16px calc(24px + env(safe-area-inset-bottom,0px))" }}>
+        <div style={{ maxWidth:620,margin:"0 auto" }}>{body}</div>
       </div>
       {delOpen&&<DeleteAccountDialog onClose={()=>setDelOpen(false)}/>}
       {mailOpen&&<ChangeEmailDialog current={email} onClose={()=>setMailOpen(false)}/>}
@@ -2968,7 +3026,7 @@ function App() {
         if(r.storyId!==openId) openStory(r.storyId,r.section,r.charId);
         else { setScreen("editor"); setSection(r.section||null); setCharRoute(r.charId); }
       } else {
-        setScreen(r.screen); setOpenId(null); setOpenData(null); setSection(null); setCharRoute(null);
+        setScreen(r.screen); setOpenId(null); setOpenData(null); setSection(r.screen==="settings"||r.screen==="trash"?r.section:null); setCharRoute(null);
       }
     };
     // pushState を使うので、戻る/進むは popstate で受ける
@@ -2981,7 +3039,7 @@ function App() {
     restored.current=true;
     const r=bootRoute.current;
     if(r.screen==="editor"&&r.storyId&&stories.some(x=>x.id===r.storyId)) openStory(r.storyId,r.section,r.charId);
-    else if(r.screen==="settings"||r.screen==="ideas"||r.screen==="trash") setScreen(r.screen);
+    else if(r.screen==="settings"||r.screen==="ideas"||r.screen==="trash"){ setScreen(r.screen); if(r.screen==="settings") setSection(r.section); }
     else if((window.location.hash||"#/")!=="#/") window.history.replaceState(null,"","#/");
   },[session,stories,recovery]);
 
@@ -3193,14 +3251,14 @@ function App() {
   return (
     <div style={{ height:"100%",maxWidth:isDesktop?"none":480,margin:"0 auto",background:C.bg,position:"relative",overflow:"hidden" }}>
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
-      {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>setScreen("settings")} onOpenIdeas={()=>setScreen("ideas")}/>}
+      {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>{ setSection(null); setScreen("settings"); }} onOpenIdeas={()=>setScreen("ideas")}/>}
       {screen==="editor"&&(openData
         ? <StoryEditor data={openData} setData={setOpenData} onBack={backToList} saveStatus={saveStatus} saveError={saveError} online={online} onRetrySave={()=>pushSave(openData,openId)} route={{section,charId:charRoute}} onNavigate={(sec,chId)=>{ setSection(sec); setCharRoute(chId); }}/>
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
-      {screen==="trash"&&<TrashScreen onBack={()=>setScreen("settings")} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
+      {screen==="settings"&&<SettingsScreen page={section} onPage={setSection} onBack={()=>{ setSection(null); setScreen("list"); }} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>{ setSection("data"); setScreen("trash"); }}/>}
+      {screen==="trash"&&<TrashScreen onBack={()=>{ setSection("data"); setScreen("settings"); }} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
       {syncNotice&&(
         <Modal compact title="お知らせ" onClose={()=>setSyncNotice(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setSyncNotice(null)}>OK</Btn></>}>
