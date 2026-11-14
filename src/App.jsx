@@ -3,10 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.9.0";
+const APP_VERSION = "0.10.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -263,18 +264,42 @@ const THEMES = {
   navy:   { label:"ネイビー", accentColor:"#3B5BA8", light:{ bg:"#F4F6FB",surface:"#FFFFFF",border:"#DBE1EE",borderL:"#EAEEF6",text:"#1A2238",sub:"#5C6B8A",hint:"#94A0BC",accent:"#3B5BA8",accentFg:"#FFF",tag:"#E7ECF7",tagTxt:"#3B5BA8",danger:"#EF4444",font:"" }, dark:{ bg:"#0E121F",surface:"#171D30",border:"#28304A",borderL:"#1E263B",text:"#E8ECF6",sub:"#94A0BC",hint:"#5C6B8A",accent:"#6B8BD6",accentFg:"#141A2B",tag:"#20283F",tagTxt:"#9DB2E0",danger:"#F87171",font:"" } },
   aqua:   { label:"アクア", accentColor:"#0E9BB5", light:{ bg:"#F2FAFB",surface:"#FFFFFF",border:"#D4EBEF",borderL:"#E5F4F6",text:"#123338",sub:"#5B8288",hint:"#8FB4B9",accent:"#0E9BB5",accentFg:"#FFF",tag:"#DEF3F6",tagTxt:"#0E8299",danger:"#EF4444",font:"" }, dark:{ bg:"#0A1618",surface:"#122224",border:"#1F383C",borderL:"#182C2F",text:"#E2F3F5",sub:"#8FB4B9",hint:"#5B8288",accent:"#3EC3DB",accentFg:"#0F2226",tag:"#193034",tagTxt:"#77CEDD",danger:"#F87171",font:"" } },
   paper:  { label:"紙とインク", accentColor:"#8A6D3B", light:{ bg:"#F7F3EB",surface:"#FDFBF6",border:"#E4DBC9",borderL:"#EFE8D9",text:"#4A3F35",sub:"#8A7B67",hint:"#B3A78F",accent:"#8A6D3B",accentFg:"#FDFBF6",tag:"#EEE6D5",tagTxt:"#7A6033",danger:"#C0562F",font:'"Hiragino Mincho ProN","Yu Mincho",serif' }, dark:{ bg:"#211C16",surface:"#2A241C",border:"#3D3529",borderL:"#332C22",text:"#EDE4D4",sub:"#B3A78F",hint:"#7A6F5C",accent:"#C9A968",accentFg:"#2A241C",tag:"#372F24",tagTxt:"#D4BC85",danger:"#D8734A",font:'"Hiragino Mincho ProN","Yu Mincho",serif' } },
+  sakura: { label:"桜", accentColor:"#D46A86", premium:true, light:{ bg:"#FDF6F8",surface:"#FFFFFF",border:"#F2DCE3",borderL:"#F8E9EE",text:"#3D2830",sub:"#8E6F79",hint:"#BFA3AC",accent:"#D46A86",accentFg:"#FFF",tag:"#FBE8EE",tagTxt:"#B44D6B",danger:"#E5484D",font:"" }, dark:{ bg:"#1A1316",surface:"#251B1F",border:"#3A2A30",borderL:"#2E2126",text:"#F7E9EE",sub:"#C2A3AD",hint:"#806670",accent:"#F08DA8",accentFg:"#251B1F",tag:"#33232A",tagTxt:"#F0A3B8",danger:"#F87171",font:"" } },
+  wakakusa: { label:"若草", accentColor:"#4E8C5E", premium:true, light:{ bg:"#F5FAF4",surface:"#FFFFFF",border:"#DCEAD9",borderL:"#EAF3E8",text:"#1F3324",sub:"#627A66",hint:"#98AE9B",accent:"#4E8C5E",accentFg:"#FFF",tag:"#E5F2E2",tagTxt:"#3F7A4F",danger:"#EF4444",font:"" }, dark:{ bg:"#111813",surface:"#1A231C",border:"#2A3A2D",borderL:"#223024",text:"#E8F3E9",sub:"#9FB8A3",hint:"#67806B",accent:"#7CC08E",accentFg:"#1A231C",tag:"#223326",tagTxt:"#8FCC9F",danger:"#F87171",font:"" } },
+  yozora: { label:"夜空", accentColor:"#E0B25C", premium:true, light:{ bg:"#F4F5F9",surface:"#FFFFFF",border:"#DDE0EA",borderL:"#ECEEF4",text:"#1B2138",sub:"#5E6584",hint:"#969CB5",accent:"#2B3A67",accentFg:"#FFF",tag:"#E6E9F2",tagTxt:"#2B3A67",danger:"#EF4444",font:"" }, dark:{ bg:"#0D1020",surface:"#161B30",border:"#273050",borderL:"#1E2540",text:"#EEF0F8",sub:"#A3A9C6",hint:"#6A7194",accent:"#E0B25C",accentFg:"#161B30",tag:"#212844",tagTxt:"#E8C580",danger:"#F87171",font:"" } },
+  washi: { label:"和紙", accentColor:"#3B2F2A", premium:true, light:{ bg:"#F5F0E6",surface:"#FBF8F1",border:"#E2D8C6",borderL:"#EDE6D8",text:"#2E2620",sub:"#7D7062",hint:"#ADA290",accent:"#3B2F2A",accentFg:"#FBF8F1",tag:"#EDE5D6",tagTxt:"#5A4636",danger:"#C2410C",font:"" }, dark:{ bg:"#1B1814",surface:"#25211B",border:"#3A3329",borderL:"#2E2922",text:"#EFE8DC",sub:"#B5A994",hint:"#7C7262",accent:"#D9C9A8",accentFg:"#25211B",tag:"#312B23",tagTxt:"#D3C2A0",danger:"#F87171",font:"" } },
+  lavender: { label:"ラベンダー", accentColor:"#8A6CC8", premium:true, light:{ bg:"#F8F6FC",surface:"#FFFFFF",border:"#E5DFF2",borderL:"#F0ECF8",text:"#2B2340",sub:"#776E8F",hint:"#A9A1BE",accent:"#8A6CC8",accentFg:"#FFF",tag:"#EEE8FA",tagTxt:"#6E52AE",danger:"#EF4444",font:"" }, dark:{ bg:"#15121D",surface:"#1F1A2A",border:"#322A44",borderL:"#282236",text:"#EFEAF8",sub:"#B1A7C8",hint:"#776E8F",accent:"#B79CF0",accentFg:"#1F1A2A",tag:"#2A2338",tagTxt:"#C3ADF2",danger:"#F87171",font:"" } },
 };
 const SANS_STACK = '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif';
 const SERIF_STACK = '"Hiragino Mincho ProN","Yu Mincho","YuMincho","Times New Roman",serif';
+// 本文の書体（ゴシック以外はプレミアム）。gf = Google Fonts から読み込む書体
+const FONTS = {
+  sans:    { label:"ゴシック",       stack: SANS_STACK },
+  mincho:  { label:"明朝",           stack: SERIF_STACK, premium:true },
+  maru:    { label:"丸ゴシック",     stack: '"Zen Maru Gothic", ' + SANS_STACK, gf:"Zen+Maru+Gothic:wght@400;500;700", premium:true },
+  hand:    { label:"手書き風",       stack: '"Klee One", ' + SANS_STACK, gf:"Klee+One:wght@400;600", premium:true },
+  classic: { label:"クラシック明朝", stack: '"Shippori Mincho", ' + SERIF_STACK, gf:"Shippori+Mincho:wght@400;600", premium:true },
+};
+const loadedFonts = new Set();
+const ensureFont = (key) => {
+  const f = FONTS[key]; if(!f||!f.gf||loadedFonts.has(key)) return;
+  loadedFonts.add(key);
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = `https://fonts.googleapis.com/css2?family=${f.gf}&display=swap`;
+  document.head.appendChild(l);
+};
 let C = { ...THEMES.mono.light, display:"var(--font-display)" };
-const applyTheme = (themeKey, dark, serifHeads) => {
+const applyTheme = (themeKey, dark, serifHeads, fontKey) => {
   const t = THEMES[themeKey] || THEMES.mono;
   const pal = (dark && t.dark) ? t.dark : t.light;
   C = { ...pal, display:"var(--font-display)" };
+  const fk = FONTS[fontKey] ? fontKey : "sans";
+  ensureFont(fk);
+  const body = FONTS[fk].stack;
   const r = document.documentElement.style;
   r.setProperty("--bg", pal.bg);
-  r.setProperty("--font", pal.font || SANS_STACK);
-  r.setProperty("--font-display", serifHeads ? SERIF_STACK : (pal.font || SANS_STACK));
+  r.setProperty("--font", body);
+  r.setProperty("--font-display", serifHeads ? (fk==="classic" ? FONTS.classic.stack : SERIF_STACK) : body);
 };
 
 // ===================== HASH ROUTER =====================
@@ -351,6 +376,8 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     bulb:<><path d="M9 18h6M10 21h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/></>,
     moon:<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>,
     mail:<><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></>,
+    lock:<><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></>,
+    sparkle:<><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></>,
     chat:<><path d="M20 15a2 2 0 01-2 2H8l-4 4V6a2 2 0 012-2h12a2 2 0 012 2z"/></>,
     doc:<><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></>,
     shield:<><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10c-4-1.5-7-5.5-7-10V6z"/></>,
@@ -2638,9 +2665,21 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSerif, email, userId, onLogout, onOpenTrash }) {
+function SettingsScreen({ onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
+  const [premOpen,setPremOpen]=useState(false);
+  const [iconName,setIconName]=useState(null);
+  useEffect(()=>{ if(!isNativeApp()) return; AppIcon.getName().then(r=>setIconName((r&&r.value)||null)).catch(()=>{}); },[]);
+  const ICONS=[{ key:null,label:"標準",img:"Default" },{ key:"AppIconSakura",label:"桜",img:"Sakura" },{ key:"AppIconWakakusa",label:"若草",img:"Wakakusa" },{ key:"AppIconYozora",label:"夜空",img:"Yozora" },{ key:"AppIconWashi",label:"和紙",img:"Washi" }];
+  const pickIcon=async(k)=>{
+    if(k&&!isPremium){ setPremOpen(true); return; }
+    try {
+      if(k) await AppIcon.change({ name:k, suppressNotification:false });
+      else await AppIcon.reset({ suppressNotification:false, disable:ICONS.filter(x=>x.key).map(x=>x.key) });
+      setIconName(k);
+    } catch(e){ console.warn(e); }
+  };
   const [filesOn,setFilesOn]=useState(()=>{ try { return localStorage.getItem("tl_files")==="1"; } catch(e){ return false; } });
   const [filesMsg,setFilesMsg]=useState("");
   const toggleFiles=()=>{ const v=!filesOn; setFilesOn(v); try { localStorage.setItem("tl_files",v?"1":"0"); } catch(e){} if(v) saveAllToFiles(); };
@@ -2669,22 +2708,48 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
         </SetGroup>
         <div style={{ fontSize:11,color:C.hint,lineHeight:1.85,padding:"0 4px",margin:"-14px 0 22px" }}>作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。</div>
 
-        <SetGroup title="表示">
+        <SetGroup title={isPremium?"表示（プレミアム）":"表示"}>
           <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
             <div style={{ fontSize:12,color:C.sub,marginBottom:10 }}>テーマ</div>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-              {Object.entries(THEMES).map(([key,t])=>(
-                <button key={key} onClick={()=>onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${theme===key?C.accent:C.border}`,background:theme===key?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit" }}>
+              {Object.entries(THEMES).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
+                <button key={key} onClick={()=>locked?setPremOpen(true):onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
                   <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
-                  <span style={{ fontSize:12.5,fontWeight:theme===key?600:400,color:C.text }}>{t.label}</span>
-                  {theme===key&&<div style={{ marginLeft:"auto" }}><Ico n="check" s={14} c={C.accent}/></div>}
+                  <span style={{ fontSize:12.5,fontWeight:on?600:400,color:C.text }}>{t.label}</span>
+                  <div style={{ marginLeft:"auto",display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
                 </button>
-              ))}
+              ); })}
+            </div>
+          </div>
+          <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
+            <div style={{ fontSize:12,color:C.sub,marginBottom:10 }}>本文の書体</div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              {Object.entries(FONTS).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
+                <button key={key} onClick={()=>{ if(locked){ setPremOpen(true); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
+                  <span style={{ fontSize:15,color:C.text,fontFamily:f.stack }}>物語を綴る</span>
+                  <span style={{ fontSize:10.5,color:C.sub }}>{f.label}</span>
+                  <div style={{ position:"absolute",top:9,right:10,display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
+                </button>
+              ); })}
             </div>
           </div>
           <SetRow icon={dark?"moon":"sun"} label="ダークモード" onClick={()=>onDark(!dark)} right={<Toggle on={dark}/>}/>
           <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
         </SetGroup>
+
+        {native&&<SetGroup title="アプリのアイコン">
+          <div style={{ padding:"14px",display:"flex",gap:10,overflowX:"auto" }}>
+            {ICONS.map(ic=>{ const locked=ic.key&&!isPremium; const on=(iconName||null)===ic.key; return (
+              <button key={ic.label} onClick={()=>pickIcon(ic.key)} style={{ flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0 }}>
+                <div style={{ position:"relative" }}>
+                  <img src={`./icons/${ic.img}.png`} alt={ic.label} style={{ width:56,height:56,borderRadius:13,border:`2px solid ${on?C.accent:C.border}`,opacity:locked?0.55:1,display:"block" }}/>
+                  {locked&&<div style={{ position:"absolute",right:-4,bottom:-4,background:C.surface,borderRadius:10,padding:3,display:"flex",border:`0.5px solid ${C.border}` }}><Ico n="lock" s={11} c={C.hint}/></div>}
+                </div>
+                <span style={{ fontSize:10.5,color:on?C.accent:C.sub }}>{ic.label}</span>
+              </button>
+            ); })}
+          </div>
+        </SetGroup>}
 
         <SetGroup title="データ">
           <SetRow icon="trash" label="ゴミ箱" sub={`削除した作品は${TRASH_DAYS}日間、元に戻せます`} onClick={onOpenTrash} last={!native}/>
@@ -2721,6 +2786,11 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
       </div>
       {delOpen&&<DeleteAccountDialog onClose={()=>setDelOpen(false)}/>}
       {mailOpen&&<ChangeEmailDialog current={email} onClose={()=>setMailOpen(false)}/>}
+      {premOpen&&(
+        <Modal compact title="プレミアム機能です" onClose={()=>setPremOpen(false)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setPremOpen(false)}>OK</Btn></>}>
+          <div style={{ fontSize:13,color:C.text,lineHeight:1.95 }}>このテーマ・書体・アイコンは、プレミアムプランで使えるようになります。<br/><span style={{ color:C.sub,fontSize:12 }}>プレミアムプランは現在準備中です。始まったら、アプリ内でお知らせします。</span></div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2779,9 +2849,15 @@ function App() {
   const [theme,setTheme]=useState(localStorage.getItem("sc_theme")||"mono");
   const [dark,setDark]=useState(localStorage.getItem("sc_dark")==="1");
   const [serifHeads,setSerifHeads]=useState(localStorage.getItem("tl_serif")!=="0");
+  const [fontKey,setFontKey]=useState(localStorage.getItem("tl_font")||"sans");
+  const [isPremium,setIsPremium]=useState(localStorage.getItem("tl_prem")==="1");
+  const metaSettingsRef=useRef({});
   const [, forceRender]=useState(0);
 
-  applyTheme(theme,dark,serifHeads);
+  // プレミアムでなければ、プレミアムのテーマ・書体は標準に戻して表示する
+  const effTheme = (THEMES[theme]&&THEMES[theme].premium&&!isPremium) ? "mono" : theme;
+  const effFont  = (FONTS[fontKey]&&FONTS[fontKey].premium&&!isPremium) ? "sans" : fontKey;
+  applyTheme(effTheme,dark,serifHeads,effFont);
 
   useEffect(()=>{
     if(/type=recovery/.test(window.location.hash)||/type=recovery/.test(window.location.search)) setRecovery(true);
@@ -2797,6 +2873,13 @@ function App() {
         let { data:meta } = await db.from("user_meta").select("*").eq("user_id",session.user.id).maybeSingle();
         if(!meta){ await db.from("user_meta").insert({user_id:session.user.id,ideas:[],settings:{}}); meta={ideas:[],settings:{}}; }
         setIdeas(meta.ideas||[]);
+        metaSettingsRef.current = meta.settings||{};
+        try {
+          const { data:ent } = await db.from("entitlements").select("premium,expires_at").eq("user_id",session.user.id).maybeSingle();
+          const prem = !!(ent&&ent.premium&&(!ent.expires_at||Date.parse(ent.expires_at)>Date.now()));
+          setIsPremium(prem); localStorage.setItem("tl_prem",prem?"1":"0");
+        } catch(e){}
+        if(meta.settings&&meta.settings.fontKey&&FONTS[meta.settings.fontKey]){ setFontKey(meta.settings.fontKey); localStorage.setItem("tl_font",meta.settings.fontKey); }
         if(meta.settings){ if(meta.settings.theme){ setTheme(meta.settings.theme); localStorage.setItem("sc_theme",meta.settings.theme);} if(typeof meta.settings.darkMode==="boolean"){ setDark(meta.settings.darkMode); localStorage.setItem("sc_dark",meta.settings.darkMode?"1":"0"); } if(typeof meta.settings.serifHeads==="boolean"){ setSerifHeads(meta.settings.serifHeads); localStorage.setItem("tl_serif",meta.settings.serifHeads?"1":"0"); } }
         // ゴミ箱に入れてから30日たった作品は完全に削除する
         try { await db.from("stories").delete().eq("user_id",session.user.id).lt("deleted_at",new Date(Date.now()-TRASH_DAYS*864e5).toISOString()); } catch(e){ console.error(e); }
@@ -2972,9 +3055,12 @@ function App() {
 
   const saveMeta=useCallback(async(patch)=>{ if(!session) return; await db.from("user_meta").update({...patch,updated_at:new Date().toISOString()}).eq("user_id",session.user.id); },[session]);
 
-  const changeTheme=(k)=>{ setTheme(k); localStorage.setItem("sc_theme",k); applyTheme(k,dark,serifHeads); forceRender(x=>x+1); saveMeta({settings:{theme:k,darkMode:dark,serifHeads}}); };
-  const changeDark=(v)=>{ setDark(v); localStorage.setItem("sc_dark",v?"1":"0"); applyTheme(theme,v,serifHeads); forceRender(x=>x+1); saveMeta({settings:{theme,darkMode:v,serifHeads}}); };
-  const changeSerif=(v)=>{ setSerifHeads(v); localStorage.setItem("tl_serif",v?"1":"0"); applyTheme(theme,dark,v); forceRender(x=>x+1); saveMeta({settings:{theme,darkMode:dark,serifHeads:v}}); };
+  // 設定はサーバーの settings を上書きせず、変えた項目だけ混ぜて保存する
+  const saveSettings=(patch)=>{ metaSettingsRef.current={ ...metaSettingsRef.current, theme, darkMode:dark, serifHeads, fontKey, ...patch }; saveMeta({settings:metaSettingsRef.current}); };
+  const changeTheme=(k)=>{ setTheme(k); localStorage.setItem("sc_theme",k); forceRender(x=>x+1); saveSettings({theme:k}); };
+  const changeDark=(v)=>{ setDark(v); localStorage.setItem("sc_dark",v?"1":"0"); forceRender(x=>x+1); saveSettings({darkMode:v}); };
+  const changeSerif=(v)=>{ setSerifHeads(v); localStorage.setItem("tl_serif",v?"1":"0"); forceRender(x=>x+1); saveSettings({serifHeads:v}); };
+  const changeFont=(k)=>{ setFontKey(k); localStorage.setItem("tl_font",k); forceRender(x=>x+1); saveSettings({fontKey:k}); };
 
   const openStory=async(id,sec,chId)=>{
     setScreen("editor"); setOpenId(id); setOpenData(null); setLoadError("");
@@ -3113,7 +3199,7 @@ function App() {
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
+      {screen==="settings"&&<SettingsScreen onBack={()=>setScreen("list")} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>setScreen("trash")}/>}
       {screen==="trash"&&<TrashScreen onBack={()=>setScreen("settings")} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
       {syncNotice&&(

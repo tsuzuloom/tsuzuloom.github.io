@@ -9,6 +9,7 @@
     "deploy": "rm -rf assets dist && vite build && cp dist/index.html . && cp -r dist/assets ."
   },
   "dependencies": {
+    "@capacitor-community/app-icon": "^7.0.0",
     "@capacitor/core": "^8.6.2",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/ios": "^8.6.2",

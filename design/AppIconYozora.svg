@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" data-label="扉のすき間からのびる線を鉛筆が描いているアイコン"><rect width="1024" height="1024" fill="#1E2638"></rect>
+<path d="M 392 690 V 410 A 120 120 0 0 1 632 410 V 690 Z" fill="#E0B25C"></path>
+<path d="M 612 690 V 420 A 104 104 0 0 0 600 372 L 632 410 V 690 Z" fill="#F3EDE2" opacity="0.9"></path>
+<circle cx="584" cy="560" r="12" fill="#F3EDE2"></circle>
+<path d="M 300 690 H 724" stroke="#F3EDE2" stroke-width="10" stroke-linecap="round"></path>
+<path d="M 626 660 C 700 660, 770 620, 748 570 S 662 540, 694 494 S 800 486, 812 420" fill="none" stroke="#F3EDE2" stroke-width="12" stroke-linecap="round"></path>
+<g transform="translate(812 420) rotate(25)">
+<path d="M 0 0 L -14 -46 H 14 Z" fill="#E8C9A0"></path>
+<path d="M 0 0 L -4.5 -15 H 4.5 Z" fill="#1E2638"></path>
+<rect x="-14" y="-200" width="28" height="154" fill="#F3EDE2"></rect>
+<rect x="-14" y="-200" width="9" height="154" fill="#1E2638" opacity="0.18"></rect>
+<rect x="-15" y="-222" width="30" height="22" fill="#B9B4AA"></rect>
+<path d="M -15 -211 H 15" stroke="#8F8A80" stroke-width="3"></path>
+<path d="M -14 -222 V -244 A 14 14 0 0 1 14 -244 V -222 Z" fill="#E7A9A0"></path>
+</g>
+<text x="512" y="842" text-anchor="middle" font-family="Cormorant Garamond, serif" font-weight="600" font-size="104" letter-spacing="2" fill="#F3EDE2">Tsuzu Loom</text>
+</svg>
