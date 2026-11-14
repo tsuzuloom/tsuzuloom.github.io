@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.6.0";
+const APP_VERSION = "0.7.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -570,6 +570,10 @@ const LoginScreen = ({ onDemo }) => {
             <button onClick={()=>{setMode("signup");say("");}} style={{ background:"none",border:"none",color:C.hint,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px 0" }}>アカウントをお持ちでない方 → 新規登録</button>
           </>}
           {mode!=="login"&&<button onClick={()=>{setMode("login");say("");}} style={{ background:"none",border:"none",color:C.hint,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px 0" }}>← ログインに戻る</button>}
+        </div>
+        <div style={{ marginTop:16,padding:"11px 12px",borderRadius:10,background:C.bg,border:`0.5px solid ${C.borderL}`,fontSize:10.5,color:C.hint,lineHeight:1.85,textAlign:"left" }}>
+          作品は暗号化された通信で保存され、運営者が中身を見たり、AIの学習に使ったりすることはありません。<br/>
+          <a href="https://tsuzuloom.github.io/docs/about.html" target="_blank" rel="noopener" style={{ color:C.sub }}>このアプリについて</a>　<a href="https://tsuzuloom.github.io/docs/privacy.html" target="_blank" rel="noopener" style={{ color:C.sub }}>プライバシーポリシー</a>
         </div>
       </div>
     </div>
@@ -2376,6 +2380,7 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
           <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
           <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
         </SetGroup>
+        <div style={{ fontSize:11,color:C.hint,lineHeight:1.85,padding:"0 4px",margin:"-14px 0 22px" }}>作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。</div>
 
         <SetGroup title="表示">
           <div style={{ padding:"14px",borderBottom:`0.5px solid ${C.borderL}` }}>
@@ -2396,15 +2401,18 @@ function SettingsScreen({ onBack, theme, dark, serifHeads, onTheme, onDark, onSe
 
         <SetGroup title="サポート">
           <SetRow icon="book" label="使い方ガイド" onClick={()=>openExternal(DOCS_URL+"guide.html")}/>
+          <SetRow icon="search" label="よくある質問" onClick={()=>openExternal(DOCS_URL+"faq.html")}/>
           <SetRow icon="mail" label="改善・ご要望を送る" sub={CONTACT_EMAIL} onClick={()=>openExternal("mailto:"+CONTACT_EMAIL+"?subject="+encodeURIComponent("Tsuzu Loom へのご意見（v"+APP_VERSION+"）"))}/>
           <SetRow icon="chat" label="Discordコミュニティ" onClick={()=>openExternal(DISCORD_URL)} last={!native}/>
           {native&&<SetRow icon="monitor" label="Webサイト版を開く" sub="パソコンからも同じデータを使えます" onClick={()=>openExternal(SITE_URL)} last/>}
         </SetGroup>
 
         <SetGroup title="このアプリについて">
+          <SetRow icon="info" label="このアプリについて" sub="個人開発・データの扱い・料金について" onClick={()=>openExternal(DOCS_URL+"about.html")}/>
+          <SetRow icon="timeline" label="アップデート情報" onClick={()=>openExternal(DOCS_URL+"changelog.html")}/>
           <SetRow icon="doc" label="利用規約" onClick={()=>openExternal(DOCS_URL+"terms.html")}/>
           <SetRow icon="shield" label="プライバシーポリシー" onClick={()=>openExternal(DOCS_URL+"privacy.html")}/>
-          <SetRow icon="info" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
+          <SetRow icon="link" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
         </SetGroup>
 
         <SetGroup>

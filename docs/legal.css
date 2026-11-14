@@ -21,3 +21,17 @@ pre { white-space: pre-wrap; font-size: 11.5px; line-height: 1.6; background: #F
   .lib { border-color: #2C3038; }
   a { color: #9DB0CE; }
 }
+.lead { font-size: 14px; }
+.note { background: #F3F4F6; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+details { border-bottom: 1px solid #F0F1F3; padding: 12px 0; }
+details:last-child { border-bottom: none; }
+summary { font-size: 14px; font-weight: 600; cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "Q. "; color: #6B7280; }
+details p { margin-top: 8px; font-size: 13.5px; }
+.ver { font-size: 15px; font-weight: 600; }
+.ver small { font-weight: 400; color: #6B7280; font-size: 12px; margin-left: 6px; }
+@media (prefers-color-scheme: dark) {
+  .note { background: #2A2E35; }
+  details { border-color: #2C3038; }
+}
