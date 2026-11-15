@@ -1422,25 +1422,38 @@ const RelationEdit = ({ charId, otherId, data, onSave, onClose, onRemove }) => {
 // ===================== RELATIONSHIP GRAPH =====================
 // つながっている人を近くに、つながっていない人は離して置く（はじめの自動配置）
 const graphAutoLayout = (ids, pairs, S) => {
-  const n=ids.length; const pos={}; const cx=S/2, cy=S/2;
-  ids.forEach((id,i)=>{ const a=2*Math.PI*i/Math.max(1,n)-Math.PI/2; pos[id]={ x:cx+S*0.36*Math.cos(a), y:cy+S*0.36*Math.sin(a) }; });
-  if(n<3) return pos;
-  const k=0.72*Math.sqrt(S*S/n);
-  const M=46;
-  for(let it=0; it<320; it++){
-    const temp=S*0.06*(1-it/320)+1;
-    const d={}; ids.forEach(id=>d[id]={x:0,y:0});
+  const pos={}; const M=50;
+  const deg={}; pairs.forEach(([a,b])=>{ deg[a]=(deg[a]||0)+1; deg[b]=(deg[b]||0)+1; });
+  const con=ids.filter(id=>deg[id]), iso=ids.filter(id=>!deg[id]);
+  // つながりのある人：ばね（つながりは引き合い、全員は少しずつ離れる）で並べる
+  const k=95, n=con.length;
+  con.forEach((id,i)=>{ const a=2*Math.PI*i/Math.max(1,n); const r=k*Math.sqrt(n)*0.6; pos[id]={ x:r*Math.cos(a), y:r*Math.sin(a) }; });
+  for(let it=0; it<450&&n>1; it++){
+    const temp=k*2*(1-it/450)+2;
+    const d={}; con.forEach(id=>d[id]={x:0,y:0});
     for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
-      const a=pos[ids[i]], b=pos[ids[j]]; let dx=a.x-b.x, dy=a.y-b.y; let dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<0.01){ dx=Math.random()-0.5; dy=Math.random()-0.5; dist=0.5; }
-      const f=k*k/dist; const fx=dx/dist*f, fy=dy/dist*f;
-      d[ids[i]].x+=fx; d[ids[i]].y+=fy; d[ids[j]].x-=fx; d[ids[j]].y-=fy;
+      const p=pos[con[i]], q=pos[con[j]]; let dx=p.x-q.x, dy=p.y-q.y; let dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<0.01){ dx=((i*7+j*3)%5)-2||1; dy=((i*3+j*5)%5)-2||1; dist=1; }
+      if(dist>k*6) continue;
+      const f=k*k/dist; d[con[i]].x+=dx/dist*f; d[con[i]].y+=dy/dist*f; d[con[j]].x-=dx/dist*f; d[con[j]].y-=dy/dist*f;
     }
-    pairs.forEach(([a,b])=>{ const p=pos[a], q=pos[b]; if(!p||!q) return; const dx=p.x-q.x, dy=p.y-q.y; const dist=Math.sqrt(dx*dx+dy*dy)||0.01; const f=dist*dist/k; const fx=dx/dist*f, fy=dy/dist*f; d[a].x-=fx; d[a].y-=fy; d[b].x+=fx; d[b].y+=fy; });
-    ids.forEach(id=>{ const p=pos[id]; d[id].x+=(cx-p.x)*0.03*k/ (S/4); d[id].y+=(cy-p.y)*0.03*k/(S/4);
-      const dl=Math.sqrt(d[id].x*d[id].x+d[id].y*d[id].y)||1; const m=Math.min(dl,temp);
-      p.x=Math.max(M,Math.min(S-M,p.x+d[id].x/dl*m)); p.y=Math.max(M,Math.min(S-M,p.y+d[id].y/dl*m)); });
+    pairs.forEach(([a,b])=>{ const p=pos[a], q=pos[b]; if(!p||!q) return; const dx=p.x-q.x, dy=p.y-q.y; const dist=Math.sqrt(dx*dx+dy*dy)||0.01; const f=dist*dist/k; d[a].x-=dx/dist*f; d[a].y-=dy/dist*f; d[b].x+=dx/dist*f; d[b].y+=dy/dist*f; });
+    con.forEach(id=>{ const p=pos[id]; d[id].x-=p.x*0.08; d[id].y-=p.y*0.08;
+      const dl=Math.sqrt(d[id].x*d[id].x+d[id].y*d[id].y)||1; const m=Math.min(dl,temp); p.x+=d[id].x/dl*m; p.y+=d[id].y/dl*m; });
   }
+  // 横幅 S に収まるように、つながりのある人のまとまりを縮める（広げはしない）
+  let bottom=M;
+  if(n){
+    const xs=con.map(i=>pos[i].x), ys=con.map(i=>pos[i].y);
+    const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+    const sc=Math.min(1,(S-2*M)/Math.max(1,x1-x0),(S-2*M)/Math.max(1,y1-y0));
+    const ox=(S-(x1-x0)*sc)/2;
+    con.forEach(id=>{ pos[id]={ x:ox+(pos[id].x-x0)*sc, y:M+(pos[id].y-y0)*sc }; });
+    bottom=M+(y1-y0)*sc+90;
+  }
+  // つながりのない人：下にまとめて並べる
+  const cols=Math.max(1,Math.floor((S-2*M)/96)+1);
+  iso.forEach((id,i)=>{ const r=Math.floor(i/cols), c=i%cols; const inRow=Math.min(cols,iso.length-r*cols); const w=(inRow-1)*96; pos[id]={ x:S/2-w/2+c*96, y:bottom+r*90 }; });
   return pos;
 };
 
@@ -1501,7 +1514,7 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
 
   const local=(e)=>{ const r=svgRef.current.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; };
   const toWorld=(p)=>({ x:(p.x-V.tx)/V.k, y:(p.y-V.ty)/V.k });
-  const clampW=(v)=>Math.max(nodeR+4,Math.min(S-nodeR-4,v));
+  const clampW=(v)=>Math.max(nodeR+4,Math.min(S*3,v));
   const onDown=(e,nodeId)=>{
     e.stopPropagation(); try { svgRef.current.setPointerCapture(e.pointerId); } catch(_){}
     const p=local(e); ptrs.current.set(e.pointerId,p);
