@@ -1502,7 +1502,7 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
   const fit=()=>{ const el=boxRef.current; if(!el) return; const W=el.clientWidth, H=el.clientHeight;
     const xs=ids.map(i=>pos[i].x), ys=ids.map(i=>pos[i].y);
     const x0=Math.min(...xs)-nodeR-30, x1=Math.max(...xs)+nodeR+30, y0=Math.min(...ys)-nodeR-20, y1=Math.max(...ys)+nodeR+40;
-    const k=Math.max(0.2,Math.min(1.6,Math.min(W/(x1-x0),H/(y1-y0))));
+    const k=Math.max(0.2,Math.min(1.1,Math.min(W/(x1-x0),H/(y1-y0))));
     setView({ k, tx:(W-(x1+x0)*k)/2, ty:(H-(y1+y0)*k)/2 }); };
   useEffect(()=>{ if(n>=2) fit(); },[n,groupFilter,S]);
   const V=view||{k:1,tx:0,ty:0};
