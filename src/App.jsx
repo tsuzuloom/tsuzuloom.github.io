@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.3";
+const APP_VERSION = "0.14.4";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -402,7 +402,7 @@ const Tag = ({ label, color, onRemove }) => (<span style={{ display:"inline-flex
 const Lbl = ({ children }) => <div style={{ fontSize:10.5,color:C.hint,marginBottom:5,fontWeight:600,letterSpacing:"0.1em" }}>{children}</div>;
 const Field = ({ label, children, mb=14 }) => <div style={{ marginBottom:mb,minWidth:0,maxWidth:"100%" }}>{label&&<Lbl>{label}</Lbl>}{children}</div>;
 const IS = () => ({ width:"100%",padding:"10px 12px",border:`0.5px solid ${C.border}`,borderRadius:10,color:C.text,background:C.surface,boxSizing:"border-box",fontFamily:"inherit",minWidth:0,maxWidth:"100%" });
-const DateInp = ({ label, value, onChange, cal }) => {
+const DateInp = ({ label, value, onChange, cal, around }) => {
   const useCal = !!(cal && cal.enabled);
   const [showPicker,setShowPicker]=useState(false);
   const [yearMode,setYearMode]=useState(false);
@@ -411,7 +411,9 @@ const DateInp = ({ label, value, onChange, cal }) => {
   useEffect(()=>{ setTextInput(value||""); },[value]);
 
   const today=new Date();
-  const t=parseYMD(value)||{y:today.getFullYear(),m:useCal?1:today.getMonth()+1,d:useCal?1:today.getDate()};
+  // 空のときは、作中の「現在」→ 独自の暦なら最後の元号の始まり → 今日、の順で近いところから開く
+  const near=(()=>{ const a=parseYMD(around); if(a) return a; if(useCal){ const eras=(cal.eras||[]).filter(e=>e&&e.y); if(eras.length){ const e=eras.reduce((x,y)=>y.y>x.y?y:x); return {y:e.y,m:1,d:1}; } } return null; })();
+  const t=parseYMD(value)||(near?{y:near.y,m:near.m||1,d:near.d||1}:{y:today.getFullYear(),m:useCal?1:today.getMonth()+1,d:useCal?1:today.getDate()});
 
   const monthCount = useCal ? cal.months.length : 12;
   const daysInMonth = useCal
@@ -455,12 +457,13 @@ const DateInp = ({ label, value, onChange, cal }) => {
           type="text"
           value={textInput}
           onChange={e=>handleTextChange(e.target.value)}
-          placeholder="例: 2021/1/1"
+          placeholder={`例: ${useCal&&near?`${near.y}/1/1`:"2021/1/1"}`}
           style={{ ...IS(),flex:1,minWidth:0 }}
         />
         <button type="button" onClick={()=>setShowPicker(true)} title="カレンダーから選ぶ" style={{ flexShrink:0,width:42,minHeight:42,borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="calendar" s={17} c={C.sub}/></button>
         <button type="button" onClick={clearAll} disabled={!value} style={{ flexShrink:0,padding:"0 12px",borderRadius:10,border:`0.5px solid ${C.border}`,background:"transparent",color:value?C.sub:C.hint,opacity:value?1:0.4,cursor:value?"pointer":"default",fontFamily:"inherit",fontSize:11.5,minHeight:42 }}>消す</button>
       </div>
+      {useCal&&value&&parseYMD(value)&&<div style={{ fontSize:11,color:C.sub,marginTop:5,lineHeight:1.6 }}>{dateLabel({calendar:cal},value)}</div>}
 
       {showPicker&&(
         <div style={{ position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"flex-end",justifyContent:"center" }} onClick={e=>{ if(e.target===e.currentTarget) closePicker(); }}>
@@ -836,7 +839,7 @@ const CharacterEdit = ({ char: init, data, onSave, onClose, onDelete }) => {
       </div>
     )}
     <Sel label="性別" value={c.genderId} onChange={v=>u("genderId",v)} options={data.genders.map(g=>({value:g.id,label:g.name}))}/><Field label="イメージカラー"><div style={{ display:"flex",gap:10,alignItems:"center" }}><input type="color" value={c.imageColor} onChange={e=>u("imageColor",e.target.value)} style={{ width:36,height:36,border:`0.5px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2 }}/><span style={{ fontSize:12,color:C.sub }}>{c.imageColor}</span></div></Field>
-    <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} label="誕生日" value={c.birthday} onChange={v=>u("birthday",v)}/><DateInp cal={data.calendar} label="死亡日" value={c.deathDate} onChange={v=>u("deathDate",v)}/></div><Inp label="備考" value={c.notes} onChange={v=>u("notes",v)} rows={3} placeholder="メモ・設定など..."/>
+    <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} around={data.nowDate} label="誕生日" value={c.birthday} onChange={v=>u("birthday",v)}/><DateInp cal={data.calendar} around={data.nowDate} label="死亡日" value={c.deathDate} onChange={v=>u("deathDate",v)}/></div><Inp label="備考" value={c.notes} onChange={v=>u("notes",v)} rows={3} placeholder="メモ・設定など..."/>
       {data.parameters.filter(p=>p.type==="long").map(p=>{ const ex=c.parameters.find(x=>x.paramId===p.id); return <Inp key={p.id} label={p.name||"（無名）"} value={ex?(ex.value||""):""} rows={4} onChange={v=>{const np=c.parameters.filter(x=>x.paramId!==p.id);if(v) np.push({paramId:p.id,value:v});u("parameters",np);}} placeholder={p.description||`${p.name||"この項目"}を書く...`}/>; })}</>}
     {tab==="links"&&<>
       <Field label="関連人物" mb={16}>        {c.relatedCharacters.map(rel=>{const ch=data.characters.find(x=>x.id===rel.charId);return ch?<CharRelCard key={rel.charId} rel={rel} character={ch} relationTypes={data.relationTypes} onUpdate={up=>u("relatedCharacters",c.relatedCharacters.map(r=>r.charId===up.charId?up:r))} onRemove={()=>u("relatedCharacters",c.relatedCharacters.filter(r=>r.charId!==rel.charId))}/>:null;})}
@@ -900,7 +903,7 @@ const SceneEdit = ({ scene: init, preset, data, onSave, onClose, onDelete }) => 
   const [tab,setTab]=useState("basic");
   return (<Modal title={s.title||"新しいシーン"} onClose={onClose} footer={<>{init&&<Btn variant="danger" icon="trash" small onClick={onDelete}>削除</Btn>}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={()=>onSave(s)}>保存</Btn></>}>
     <Tabs active={tab} onChange={setTab} tabs={[{key:"basic",label:"基本"},{key:"script",label:"脚本"},{key:"links",label:"紐付け"}]}/>
-    {tab==="basic"&&<><Inp label="シーンタイトル" value={s.title} onChange={v=>u("title",v)} placeholder="タイトルを入力..."/><div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} label="開始日" value={s.startDate} onChange={v=>u("startDate",v)}/><DateInp cal={data.calendar} label="終了日" value={s.endDate} onChange={v=>u("endDate",v)}/></div>
+    {tab==="basic"&&<><Inp label="シーンタイトル" value={s.title} onChange={v=>u("title",v)} placeholder="タイトルを入力..."/><div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}><DateInp cal={data.calendar} around={data.nowDate} label="開始日" value={s.startDate} onChange={v=>u("startDate",v)}/><DateInp cal={data.calendar} around={data.nowDate} label="終了日" value={s.endDate} onChange={v=>u("endDate",v)}/></div>
     {s.startDate&&s.relatedCharacters.length>0&&<div style={{ background:C.tag,borderRadius:10,padding:"10px 12px",marginBottom:14 }}><Lbl>登場人物の年齢（開始日時点）</Lbl>{s.relatedCharacters.map(cid=>{const ch=data.characters.find(c=>c.id===cid);if(!ch||!ch.birthday) return null;const age=ageBetween(data,ch.birthday,s.startDate);return age!==null?<div key={cid} style={{ display:"flex",gap:6,fontSize:12,marginBottom:1 }}><span style={{ color:ch.imageColor,fontWeight:700 }}>●</span><span style={{color:C.text}}>{charName(ch)}</span><span style={{ color:C.sub }}>{age}歳</span></div>:null;})}</div>}
     <Sel label="関連場所" value={s.relatedLocationId} onChange={v=>u("relatedLocationId",v)} options={data.locations.map(l=>({value:l.id,label:l.name||"（無名）"}))}/>
     <Sel label="関連する章" value={s.relatedChapterId} onChange={v=>u("relatedChapterId",v)} options={data.chapters.map(c=>({value:c.id,label:c.title||"（無題）"}))}/><Inp label="備考" value={s.notes} onChange={v=>u("notes",v)} rows={3} placeholder="メモ..."/></>}
@@ -1728,8 +1731,8 @@ const EventEdit = ({ ev: init, data, onSave, onClose, onDelete }) => {
   return (<Modal title={e.title||"新しい出来事"} onClose={onClose} footer={<>{init&&<Btn variant="danger" icon="trash" small onClick={onDelete}>削除</Btn>}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={()=>onSave(e)}>保存</Btn></>}>
     <Inp label="出来事の名前" value={e.title} onChange={v=>u("title",v)} placeholder="例：王国の建国、大戦の終結、主人公の家出..."/>
     <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}>
-      <DateInp cal={data.calendar} label="日付（始まり）" value={e.startDate} onChange={v=>u("startDate",v)}/>
-      <DateInp cal={data.calendar} label="終わり（任意）" value={e.endDate} onChange={v=>u("endDate",v)}/>
+      <DateInp cal={data.calendar} around={data.nowDate} label="日付（始まり）" value={e.startDate} onChange={v=>u("startDate",v)}/>
+      <DateInp cal={data.calendar} around={data.nowDate} label="終わり（任意）" value={e.endDate} onChange={v=>u("endDate",v)}/>
     </div>
     {!e.startDate&&<div style={{ fontSize:11,color:C.hint,margin:"-6px 0 12px",lineHeight:1.7 }}>日付を入れると年表に並びます。</div>}
     <Field label="色">
@@ -1819,8 +1822,8 @@ const TimelineView = ({ data, onEditScene, onEditEvent, onAddEvent, onOpenChar }
           <Sel label="人物（その人が関わるものだけ）" value={charId} onChange={setCharId} options={data.characters.map(c=>({value:c.id,label:charName(c)}))}/>
           <Sel label="章（その章のシーンだけ）" value={chapterId} onChange={setChapterId} options={data.chapters.map(c=>({value:c.id,label:c.title||"（無題）"}))}/>
           <div data-date-grid style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8 }}>
-            <DateInp cal={data.calendar} label="この日から" value={from} onChange={setFrom}/>
-            <DateInp cal={data.calendar} label="この日まで" value={to} onChange={setTo}/>
+            <DateInp cal={data.calendar} around={data.nowDate} label="この日から" value={from} onChange={setFrom}/>
+            <DateInp cal={data.calendar} around={data.nowDate} label="この日まで" value={to} onChange={setTo}/>
           </div>
           {nFilters>0&&<div style={{ textAlign:"right",marginBottom:10 }}><Btn small variant="ghost" onClick={()=>{ setCharId(""); setChapterId(""); setFrom(""); setTo(""); }}>条件をクリア</Btn></div>}
         </div>
@@ -2453,7 +2456,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "calendar": return <CalendarSettings data={data} upd={upd}/>;
       case "storySettings": return (<div style={{ flex:1,overflowY:"auto",padding:16 }}><div style={{ maxWidth:620,margin:"0 auto" }}><Inp label="作品タイトル" value={data.storyTitle} onChange={v=>upd(p=>({...p,storyTitle:v}))} placeholder="タイトルを入力..."/><Inp label="あらすじ" value={data.storySynopsis} onChange={v=>upd(p=>({...p,storySynopsis:v}))} rows={5} placeholder="作品の概要..."/>
 <Divider/>
-<DateInp cal={data.calendar} label="作中の「現在」" value={data.nowDate} onChange={v=>upd(p=>({...p,nowDate:v}))}/>
+<DateInp cal={data.calendar} around={data.nowDate} label="作中の「現在」" value={data.nowDate} onChange={v=>upd(p=>({...p,nowDate:v}))}/>
 <div style={{ fontSize:11,color:C.hint,lineHeight:1.9,marginTop:-6 }}>人物一覧や人物ページに出る年齢は、この日を基準に計算されます。物語がいま何年何月なのかを入れてください。空のままだと、独自の暦を使っている作品では年齢が出ません（現実の暦のままなら今日の日付が使われます）。</div>
 <Divider/><Field label="バックアップ"><div style={{ display:"flex",flexDirection:"column",gap:8 }}><Btn icon="download" onClick={exportData}>JSONでバックアップ</Btn><div><Btn icon="upload" onClick={()=>importRef.current.click()}>JSONを復元</Btn><input ref={importRef} type="file" accept=".json" style={{ display:"none" }} onChange={handleImport}/></div></div></Field><Divider/><Field label="画像の保存形式">
   {embeddedCount>0?(<>
