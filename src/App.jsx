@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.4";
+const APP_VERSION = "0.14.5";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -2935,6 +2935,11 @@ const famSortFn = (data) => {
 };
 
 const FT = { W:92, H:86, GAP:14, UNIT:34, ROW:150, PAD:28 };
+// 世代の並びが成り立つか（親が子より上、夫婦・きょうだいが同じ段に置けるか）
+const famConsistent = (data,family) => {
+  const L=famLayout({ ...data, family });
+  return L.links.every(l=>l.type!=="parent"||(L.gen[l.b]>L.gen[l.a]));
+};
 const famLayout = (data) => {
   const links=famLinks(data);
   const m=famMaps(links);
@@ -3089,6 +3094,13 @@ function FamilyPersonSheet({ data, id, onClose, onOpenChar, setFamily }) {
   const explicitSibs=(m.sibs[id]||[]);
   const sibsAll=famSiblingsOf(m,id).sort(cmp);
   const remove=(pred)=>setFamily(fam=>fam.filter(l=>!pred(l)));
+  // 親と子の向きを入れ替える（読み込みや登録で逆になったとき用）
+  const swapParent=(parent,child)=>{
+    const next=(data.family||[]).map(l=>l.type==="parent"&&l.a===parent&&l.b===child?{...l,a:child,b:parent}:l);
+    if(!famConsistent(data,next)){ setErr(`入れ替えると、${name(child)}が親で${name(parent)}が子になりますが、ほかの家族のつながり（夫婦やきょうだいなど）と世代が合わなくなります。先にそちらを見直してください。`); setAddKind(null); return; }
+    setErr(""); setFamily(()=>next);
+  };
+  const swapBtn=(parent,child)=>(<button onClick={()=>swapParent(parent,child)} title="親と子を入れ替える" aria-label="親と子を入れ替える" style={{ display:"flex",alignItems:"center",gap:3,background:"none",border:`0.5px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:"3px 7px",fontSize:10.5,color:C.sub,fontFamily:"inherit",flexShrink:0 }}>⇅ 逆にする</button>);
   const startAdd=(k)=>{ setErr(""); setPick(""); setAddKind(k); setPartner(k==="child"&&spouses.length===1?spouses[0]:""); };
   const candidates=data.characters.filter(c=>{
     if(c.id===id) return false;
@@ -3102,11 +3114,14 @@ function FamilyPersonSheet({ data, id, onClose, onOpenChar, setFamily }) {
     if(!pick) return;
     if(addKind==="parent"){
       if(famIsAncestor(m,id,pick)||pick===id){ setErr(`${name(pick)}は${ch?charName(ch):""}の子孫なので、親にはできません。`); return; }
-      setFamily(fam=>[...fam,{ id:uid(),type:"parent",a:pick,b:id }]);
+      const add={ id:uid(),type:"parent",a:pick,b:id };
+      if(!famConsistent(data,[...(data.family||[]),add])){ setErr(`${name(pick)}を親にすると、ほかの家族のつながりと世代が合わなくなります。`); return; }
+      setFamily(fam=>[...fam,add]);
     } else if(addKind==="child"){
       if(famIsAncestor(m,pick,id)){ setErr(`${name(pick)}は${charName(ch)}の祖先なので、子にはできません。`); return; }
       const add=[{ id:uid(),type:"parent",a:id,b:pick }];
       if(partner&&!(m.parents[pick]||[]).includes(partner)) add.push({ id:uid(),type:"parent",a:partner,b:pick });
+      if(!famConsistent(data,[...(data.family||[]),...add])){ setErr(`${name(pick)}を子にすると、ほかの家族のつながりと世代が合わなくなります。`); return; }
       setFamily(fam=>[...fam,...add]);
     } else if(addKind==="spouse"){
       setFamily(fam=>[...fam,{ id:uid(),type:"spouse",a:id,b:pick }]);
@@ -3161,17 +3176,18 @@ function FamilyPersonSheet({ data, id, onClose, onOpenChar, setFamily }) {
   );
   return (
     <Modal compact title={charName(ch)} onClose={onClose} footer={<><Btn small onClick={()=>onOpenChar(id)} icon="person">人物ページを開く</Btn><div style={{ flex:1 }}/><Btn small variant="primary" onClick={onClose}>閉じる</Btn></>}>
+      {err&&!addKind&&<div style={{ marginBottom:12,padding:"10px 12px",borderRadius:10,background:C.danger+"14",border:`0.5px solid ${C.danger}`,color:C.danger,fontSize:12,lineHeight:1.7 }}>{err}</div>}
       <Sec title="親" kind="parent" empty={parents.length?null:"まだいません"}>
-        {parents.map(p=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="parent"&&l.a===p&&l.b===id)}/>)}
+        {parents.map(p=><Row key={p} pid={p} extra={swapBtn(p,id)} onRemove={()=>remove(l=>l.type==="parent"&&l.a===p&&l.b===id)}/>)}
       </Sec>
       <Sec title="配偶者・パートナー" kind="spouse" empty={spouses.length?null:"まだいません"}>
         {spouses.map(p=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="spouse"&&((l.a===p&&l.b===id)||(l.a===id&&l.b===p)))}/>)}
       </Sec>
       <Sec title="子" kind="child" empty={kids.length?null:"まだいません"}>
-        {kids.map((p,i)=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="parent"&&l.a===id&&l.b===p)} extra={kids.length>1&&<div style={{ display:"flex" }}>
+        {kids.map((p,i)=><Row key={p} pid={p} onRemove={()=>remove(l=>l.type==="parent"&&l.a===id&&l.b===p)} extra={<div style={{ display:"flex",alignItems:"center",gap:2 }}>{swapBtn(id,p)}{kids.length>1&&<>
           <button onClick={()=>moveKid(i,-1)} disabled={i===0} aria-label="上へ" style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",padding:5,opacity:i===0?0.25:1,display:"flex" }}><Ico n="chevU" s={14} c={C.sub}/></button>
           <button onClick={()=>moveKid(i,1)} disabled={i===kids.length-1} aria-label="下へ" style={{ background:"none",border:"none",cursor:i===kids.length-1?"default":"pointer",padding:5,opacity:i===kids.length-1?0.25:1,display:"flex" }}><Ico n="chevD" s={14} c={C.sub}/></button>
-        </div>}/>)}
+        </>}</div>}/>)}
         {kids.length>1&&<div style={{ fontSize:10.5,color:C.hint,paddingTop:5 }}>上にいるほど家系図の左に並びます。</div>}
       </Sec>
       <Sec title="きょうだい" kind="sibling" empty={sibsAll.length?null:"まだいません"}>
