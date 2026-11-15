@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.14.5";
+const APP_VERSION = "0.15.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -387,6 +387,7 @@ const Ico = ({ n, s=20, c="currentColor", sw=1.5 }) => {
     monitor:<><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></>,
     palette:<><path d="M12 3a9 9 0 100 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 005-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10.5" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/></>,
     help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 015 .9c0 1.7-2.5 2.2-2.5 3.8"/><path d="M12 17.2v.1"/></>,
+    expand:<><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></>,
     tree:<><circle cx="12" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M12 7.2V12M6 16.8V12h12v4.8"/></>,
     minus:<><path d="M5 12h14"/></>,
     sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
@@ -1350,60 +1351,120 @@ const RelationEdit = ({ charId, otherId, data, onSave, onClose, onRemove }) => {
   const ea = me ? me.relatedCharacters.find(r=>r.charId===otherId) : null;
   const eb = other ? other.relatedCharacters.find(r=>r.charId===charId) : null;
   const has=(e)=>!!(e&&(e.relTypeId||e.text||e.arrowOut));
-  const [aType,setAType]=useState((ea&&ea.relTypeId)||"");
-  const [bType,setBType]=useState((eb&&eb.relTypeId)||"");
+  const fresh=!ea&&!eb; const t0=(data.relationTypes[0]&&data.relationTypes[0].id)||"";
+  const [aType,setAType]=useState((ea&&ea.relTypeId)||(fresh?t0:""));
+  const [bType,setBType]=useState((eb&&eb.relTypeId)||(fresh?t0:""));
   const [aCall,setACall]=useState((ea&&ea.callName)||(eb&&eb.calledName)||"");
   const [bCall,setBCall]=useState((eb&&eb.callName)||(ea&&ea.calledName)||"");
   const [aText,setAText]=useState((ea&&ea.text)||"");
   const [bText,setBText]=useState((eb&&eb.text)||"");
   const [aLine,setALine]=useState((ea&&ea.lineStyle)||"solid");
   const [bLine,setBLine]=useState((eb&&eb.lineStyle)||"solid");
-  const [aArrow,setAArrow]=useState(ea&&ea.arrowOut!==undefined?!!ea.arrowOut:has(ea));
-  const [bArrow,setBArrow]=useState(eb&&eb.arrowOut!==undefined?!!eb.arrowOut:has(eb));
+  const [aArrow,setAArrow]=useState(fresh?true:(ea&&ea.arrowOut!==undefined?!!ea.arrowOut:has(ea)));
+  const [bArrow,setBArrow]=useState(fresh?true:(eb&&eb.arrowOut!==undefined?!!eb.arrowOut:has(eb)));
+  const [detail,setDetail]=useState(false);
   if(!me||!other) return null;
+  const onA=!!(aType||aText||aArrow), onB=!!(bType||bText||bArrow);
+  const mode = onA&&onB ? "both" : onB ? "ba" : onA ? "ab" : "";
+  const firstType = (data.relationTypes[0]&&data.relationTypes[0].id)||"";
+  // 向き：片方だけ（片想いなど）／両方（両想いなど）
+  const setMode=(m)=>{
+    if(m==="ab"){ if(!aType) setAType(bType||firstType); if(!aText&&bText&&!onA) setAText(bText); setAArrow(true); setBType(""); setBText(""); setBArrow(false); }
+    if(m==="ba"){ if(!bType) setBType(aType||firstType); if(!bText&&aText&&!onB) setBText(aText); setBArrow(true); setAType(""); setAText(""); setAArrow(false); }
+    if(m==="both"){ const t=aType||bType||firstType; if(!aType) setAType(t); if(!bType) setBType(t); setAArrow(true); setBArrow(true); }
+  };
+  // ワンタップで向きを逆にする（呼び方は人についているので、そのまま）
+  const swap=()=>{ setAType(bType); setBType(aType); setAText(bText); setBText(aText); setAArrow(bArrow); setBArrow(aArrow); setALine(bLine); setBLine(aLine); };
+  const sameType = !(onA&&onB) || aType===bType;
+  const simpleType = onA ? aType : bType;
+  const setSimpleType=(v)=>{ if(onA||!onB) setAType(v); if(onB) setBType(v); if(!onA&&!onB){ setAArrow(true); } };
   const save=()=>onSave(charId,otherId,
     { charId:otherId, relTypeId:aType, callName:aCall, calledName:bCall, text:aText, arrowOut:aArrow, lineStyle:aLine, direction:"both" },
     { charId:charId,  relTypeId:bType, callName:bCall, calledName:aCall, text:bText, arrowOut:bArrow, lineStyle:bLine, direction:"both" });
+  const nm=(c)=>{ const s=charName(c); return s.length>7?s.slice(0,7)+"…":s; };
+  const modeBtn=(m,label)=>(
+    <button key={m} onClick={()=>setMode(m)} style={{ flex:1,padding:"10px 4px",borderRadius:10,border:`1.5px solid ${mode===m?C.accent:C.border}`,background:mode===m?C.accent+"14":"transparent",color:mode===m?C.text:C.sub,fontSize:12,cursor:"pointer",fontFamily:"inherit",lineHeight:1.4 }}>{label}</button>
+  );
+  const typeColor=(id)=>{ const t=data.relationTypes.find(x=>x.id===id); return t?t.color:C.hint; };
+  const arrowGlyph = mode==="both"?"⇄":mode==="ba"?"←":mode==="ab"?"→":"―";
   return (
     <Modal title="関係を編集" onClose={onClose} footer={<>{(ea||eb)&&<Btn variant="danger" icon="trash" small onClick={onRemove}>関係を解除</Btn>}<div style={{ flex:1 }}/><Btn variant="primary" icon="save" onClick={save}>保存</Btn></>}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:14,padding:"4px 2px 8px" }}>
-        <div style={{ textAlign:"center" }}><RelFace c={me}/><div style={{ fontSize:11,color:C.sub,marginTop:5 }}>{charName(me)}</div></div>
-        <div style={{ fontSize:18,color:C.hint,paddingBottom:16 }}>⇄</div>
-        <div style={{ textAlign:"center" }}><RelFace c={other}/><div style={{ fontSize:11,color:C.sub,marginTop:5 }}>{charName(other)}</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:"4px 2px 6px" }}>
+        <div style={{ textAlign:"center",width:90 }}><RelFace c={me}/><div style={{ fontSize:11,color:C.sub,marginTop:5 }}>{nm(me)}</div></div>
+        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,paddingBottom:14 }}>
+          <div style={{ fontSize:24,color:typeColor(simpleType),lineHeight:1 }}>{arrowGlyph}</div>
+          {(mode==="ab"||mode==="ba")&&<button onClick={swap} style={{ display:"flex",alignItems:"center",gap:3,background:"none",border:`0.5px solid ${C.border}`,borderRadius:12,cursor:"pointer",padding:"3px 9px",fontSize:10.5,color:C.sub,fontFamily:"inherit" }}>⇄ 逆にする</button>}
+        </div>
+        <div style={{ textAlign:"center",width:90 }}><RelFace c={other}/><div style={{ fontSize:11,color:C.sub,marginTop:5 }}>{nm(other)}</div></div>
       </div>
-      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.85,padding:"0 2px 16px" }}>関係は向きごとに別々に決められます。片方だけ設定すれば片想い、両方設定すれば行き違いも表せます。</div>
-      <RelSide from={me} to={other} type={aType} setType={setAType} call={aCall} setCall={setACall} text={aText} setText={setAText} arrow={aArrow} setArrow={setAArrow} line={aLine} setLine={setALine} relationTypes={data.relationTypes}/>
-      <RelSide from={other} to={me} type={bType} setType={setBType} call={bCall} setCall={setBCall} text={bText} setText={setBText} arrow={bArrow} setArrow={setBArrow} line={bLine} setLine={setBLine} relationTypes={data.relationTypes}/>
+      <Field label="向き">
+        <div style={{ display:"flex",gap:6 }}>
+          {modeBtn("ab",<>{nm(me)}<br/>→ {nm(other)}</>)}
+          {modeBtn("both",<>おたがい<br/>⇄</>)}
+          {modeBtn("ba",<>{nm(other)}<br/>→ {nm(me)}</>)}
+        </div>
+        <div style={{ fontSize:10.5,color:C.hint,marginTop:6,lineHeight:1.7 }}>片想いや「一方的に慕っている」は片方の向き、両想いや友人同士は「おたがい」。</div>
+      </Field>
+      {sameType
+        ? <Sel label="関係の種類（線の色になります）" value={simpleType} onChange={setSimpleType} options={data.relationTypes.map(x=>({value:x.id,label:x.name}))}/>
+        : <div style={{ fontSize:11.5,color:C.sub,background:C.tag,borderRadius:10,padding:"9px 11px",marginBottom:14,lineHeight:1.7 }}>向きごとに違う種類になっています。「くわしく設定」で変えられます。</div>}
+      {(mode==="ab"||mode==="both")&&<Inp label={`${nm(me)} → ${nm(other)} のひとこと`} value={aText} onChange={setAText} placeholder="例：頭が上がらない"/>}
+      {(mode==="ba"||mode==="both")&&<Inp label={`${nm(other)} → ${nm(me)} のひとこと`} value={bText} onChange={setBText} placeholder="例：放っておけない"/>}
+      <button onClick={()=>setDetail(v=>!v)} style={{ display:"flex",alignItems:"center",gap:5,background:"none",border:"none",padding:"4px 0 12px",cursor:"pointer",color:C.accent,fontSize:12.5,fontFamily:"inherit" }}><Ico n={detail?"chevU":"chevD"} s={14} c={C.accent}/>くわしく設定（呼び方・線の形・向きごとの種類）</button>
+      {detail&&<>
+        <RelSide from={me} to={other} type={aType} setType={setAType} call={aCall} setCall={setACall} text={aText} setText={setAText} arrow={aArrow} setArrow={setAArrow} line={aLine} setLine={setALine} relationTypes={data.relationTypes}/>
+        <RelSide from={other} to={me} type={bType} setType={setBType} call={bCall} setCall={setBCall} text={bText} setText={setBText} arrow={bArrow} setArrow={setBArrow} line={bLine} setLine={setBLine} relationTypes={data.relationTypes}/>
+      </>}
     </Modal>
   );
 };
 
 // ===================== RELATIONSHIP GRAPH =====================
+// つながっている人を近くに、つながっていない人は離して置く（はじめの自動配置）
+const graphAutoLayout = (ids, pairs, S) => {
+  const n=ids.length; const pos={}; const cx=S/2, cy=S/2;
+  ids.forEach((id,i)=>{ const a=2*Math.PI*i/Math.max(1,n)-Math.PI/2; pos[id]={ x:cx+S*0.36*Math.cos(a), y:cy+S*0.36*Math.sin(a) }; });
+  if(n<3) return pos;
+  const k=0.72*Math.sqrt(S*S/n);
+  const M=46;
+  for(let it=0; it<320; it++){
+    const temp=S*0.06*(1-it/320)+1;
+    const d={}; ids.forEach(id=>d[id]={x:0,y:0});
+    for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+      const a=pos[ids[i]], b=pos[ids[j]]; let dx=a.x-b.x, dy=a.y-b.y; let dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<0.01){ dx=Math.random()-0.5; dy=Math.random()-0.5; dist=0.5; }
+      const f=k*k/dist; const fx=dx/dist*f, fy=dy/dist*f;
+      d[ids[i]].x+=fx; d[ids[i]].y+=fy; d[ids[j]].x-=fx; d[ids[j]].y-=fy;
+    }
+    pairs.forEach(([a,b])=>{ const p=pos[a], q=pos[b]; if(!p||!q) return; const dx=p.x-q.x, dy=p.y-q.y; const dist=Math.sqrt(dx*dx+dy*dy)||0.01; const f=dist*dist/k; const fx=dx/dist*f, fy=dy/dist*f; d[a].x-=fx; d[a].y-=fy; d[b].x+=fx; d[b].y+=fy; });
+    ids.forEach(id=>{ const p=pos[id]; d[id].x+=(cx-p.x)*0.03*k/ (S/4); d[id].y+=(cy-p.y)*0.03*k/(S/4);
+      const dl=Math.sqrt(d[id].x*d[id].x+d[id].y*d[id].y)||1; const m=Math.min(dl,temp);
+      p.x=Math.max(M,Math.min(S-M,p.x+d[id].x/dl*m)); p.y=Math.max(M,Math.min(S-M,p.y+d[id].y/dl*m)); });
+  }
+  return pos;
+};
+
 const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes }) => {
   const [selectedId,setSelectedId]=useState(null);
   const [groupFilter,setGroupFilter]=useState("");
   const [drafts,setDrafts]=useState({});          // 指を離すまでの仮位置
-  const dragRef=useRef(null);
-  const svgRef=useRef(null);
+  const [view,setView]=useState(null);            // 拡大率と位置 {k,tx,ty}
+  const [addOpen,setAddOpen]=useState(false);
+  const [addA,setAddA]=useState(""); const [addB,setAddB]=useState("");
+  const svgRef=useRef(null); const boxRef=useRef(null);
+  const ptrs=useRef(new Map()); const gest=useRef(null);
   const chars=groupFilter?data.characters.filter(c=>c.relatedGroups.some(r=>r.groupId===groupFilter)):data.characters;
-  const size=Math.min(window.innerWidth-24,456);
-  const cx=size/2, cy=size/2, R=size*0.38;
-  const nodeR=chars.length>12?16:chars.length>8?19:22;
-  const saved=data.graphPositions||{};
-  const pos={};
-  chars.forEach((c,i)=>{
-    const d=drafts[c.id]||saved[c.id];
-    if(d) pos[c.id]={x:d.x*size,y:d.y*size};
-    else { const ang=(2*Math.PI*i/chars.length)-Math.PI/2; pos[c.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)}; }
-  });
-  const toSvg=(e)=>{ const r=svgRef.current.getBoundingClientRect(); return { x:((e.clientX-r.left)/r.width)*size, y:((e.clientY-r.top)/r.height)*size }; };
-  const clamp=(v)=>Math.max(nodeR+4,Math.min(size-nodeR-4,v));
+  const n=chars.length;
+  const S=Math.round(Math.max(460,Math.min(2000,150*Math.sqrt(n)+160)));   // 人数に合わせて広げる
+  const nodeR=20;
+  const boxH=Math.round(Math.max(340,Math.min(window.innerHeight*0.6,640)));
 
   // 双方向を別々に持つ：A側の関係とB側の関係をひとつの線にまとめる
   const relOf=(aId,bId)=>{ const a=data.characters.find(c=>c.id===aId); return a?a.relatedCharacters.find(r=>r.charId===bId):null; };
+  const idSet=new Set(chars.map(c=>c.id));
   const edges=[]; const seen=new Set();
   chars.forEach(c=>{ c.relatedCharacters.forEach(rel=>{
-    if(!pos[rel.charId]) return;
+    if(!idSet.has(rel.charId)) return;
     const key=[c.id,rel.charId].sort().join("|"); if(seen.has(key)) return; seen.add(key);
     const [aId,bId]=key.split("|");
     const ra=relOf(aId,bId), rb=relOf(bId,aId);
@@ -1417,106 +1478,149 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
       outB: rb&&rb.arrowOut!==undefined ? !!rb.arrowOut : !!tB,
       lineA:(ra&&ra.lineStyle)||"solid", lineB:(rb&&rb.lineStyle)||"solid" });
   }); });
+
+  const ids=chars.map(c=>c.id);
+  const auto=useMemo(()=>graphAutoLayout(ids,edges.map(e=>[e.a,e.b]),S),[ids.join(","),edges.map(e=>e.a+e.b).join(","),S]);
+  const saved=data.graphPositions||{};
+  const pos={};
+  chars.forEach(c=>{ const d=drafts[c.id]||saved[c.id]; pos[c.id]=d?{x:d.x*S,y:d.y*S}:auto[c.id]; });
+
+  // 画面に全体が収まる大きさ
+  const fit=()=>{ const el=boxRef.current; if(!el) return; const W=el.clientWidth, H=el.clientHeight;
+    const xs=ids.map(i=>pos[i].x), ys=ids.map(i=>pos[i].y);
+    const x0=Math.min(...xs)-nodeR-30, x1=Math.max(...xs)+nodeR+30, y0=Math.min(...ys)-nodeR-20, y1=Math.max(...ys)+nodeR+40;
+    const k=Math.max(0.2,Math.min(1.6,Math.min(W/(x1-x0),H/(y1-y0))));
+    setView({ k, tx:(W-(x1+x0)*k)/2, ty:(H-(y1+y0)*k)/2 }); };
+  useEffect(()=>{ if(n>=2) fit(); },[n,groupFilter,S]);
+  const V=view||{k:1,tx:0,ty:0};
+  const zoomAt=(f,sx,sy)=>setView(v=>{ const cur=v||V; const k=Math.max(0.2,Math.min(3,cur.k*f)); const wx=(sx-cur.tx)/cur.k, wy=(sy-cur.ty)/cur.k; return { k, tx:sx-wx*k, ty:sy-wy*k }; });
+  const zoomCenter=(f)=>{ const el=boxRef.current; if(el) zoomAt(f,el.clientWidth/2,el.clientHeight/2); };
+  useEffect(()=>{ const el=boxRef.current; if(!el) return;
+    const wh=(e)=>{ if(!e.ctrlKey&&!e.metaKey) return; e.preventDefault(); const r=el.getBoundingClientRect(); zoomAt(e.deltaY<0?1.1:0.9,e.clientX-r.left,e.clientY-r.top); };
+    el.addEventListener("wheel",wh,{passive:false}); return ()=>el.removeEventListener("wheel",wh); });
+
+  const local=(e)=>{ const r=svgRef.current.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; };
+  const toWorld=(p)=>({ x:(p.x-V.tx)/V.k, y:(p.y-V.ty)/V.k });
+  const clampW=(v)=>Math.max(nodeR+4,Math.min(S-nodeR-4,v));
+  const onDown=(e,nodeId)=>{
+    e.stopPropagation(); try { svgRef.current.setPointerCapture(e.pointerId); } catch(_){}
+    const p=local(e); ptrs.current.set(e.pointerId,p);
+    if(ptrs.current.size===2){ const [a,b]=[...ptrs.current.values()]; gest.current={ type:"pinch", d:Math.hypot(a.x-b.x,a.y-b.y), k:V.k, mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2}, tx:V.tx, ty:V.ty }; return; }
+    gest.current= nodeId ? { type:"node", id:nodeId, start:p, moved:false } : { type:"pan", start:p, tx:V.tx, ty:V.ty, moved:false };
+  };
+  const onMove=(e)=>{
+    if(!ptrs.current.has(e.pointerId)) return;
+    const p=local(e); ptrs.current.set(e.pointerId,p); const g=gest.current; if(!g) return;
+    if(g.type==="pinch"&&ptrs.current.size>=2){ const [a,b]=[...ptrs.current.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); const k=Math.max(0.2,Math.min(3,g.k*d/g.d)); const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2}; const wx=(g.mid.x-g.tx)/g.k, wy=(g.mid.y-g.ty)/g.k; setView({ k, tx:mid.x-wx*k, ty:mid.y-wy*k }); return; }
+    const far=Math.hypot(p.x-g.start.x,p.y-g.start.y)>5; if(far) g.moved=true; if(!g.moved) return;
+    if(g.type==="pan") setView({ k:V.k, tx:g.tx+(p.x-g.start.x), ty:g.ty+(p.y-g.start.y) });
+    if(g.type==="node"){ const w=toWorld(p); setDrafts(prev=>({...prev,[g.id]:{x:clampW(w.x)/S,y:clampW(w.y)/S}})); }
+  };
+  const onUp=(e)=>{
+    ptrs.current.delete(e.pointerId); const g=gest.current;
+    if(ptrs.current.size>0){ if(g&&g.type==="pinch"){ const [p]=[...ptrs.current.values()]; gest.current={ type:"pan", start:p, tx:V.tx, ty:V.ty, moved:true }; } return; }
+    gest.current=null; if(!g) return;
+    if(g.type==="node"){ if(g.moved){ setDrafts(prev=>{ const q=prev[g.id]; if(q&&onMoveNodes) onMoveNodes({[g.id]:q}); const nn={...prev}; delete nn[g.id]; return nn; }); } else setSelectedId(s=>s===g.id?null:g.id); }
+    if(g.type==="pan"&&!g.moved) setSelectedId(null);
+  };
+
   const isDim=(id)=>selectedId&&id!==selectedId&&!edges.some(e=>(e.a===selectedId&&e.b===id)||(e.b===selectedId&&e.a===id));
   const edgeActive=(e)=>!selectedId||e.a===selectedId||e.b===selectedId;
   const selChar=selectedId?data.characters.find(c=>c.id===selectedId):null;
   const moved=Object.keys(saved).length>0;
+  const showLabels=!!selectedId||n<=12||V.k>=0.9;     // 人が多いときは、選んだ人の線だけ文字を出す
+  const fz=(px)=>px/Math.max(V.k,0.7);                  // 縮小しても文字が小さくなりすぎないように
 
-  // 向きごとに1本ずつ、平行に少しずらして引く
-  const EdgeLabel=({x,y,deg,color,name,text})=>{
+  const Label=({x,y,color,name,text})=>{
     if(!name&&!text) return null;
-    const a=((deg+180)%360+360)%360-180; const d=(a>90||a<-90)?a+180:a;
-    const w=name?name.length*9+12:0;
-    return (
-      <g transform={`rotate(${d.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})`}>
-        {name&&<><rect x={x-w/2} y={y-8} width={w} height={16} rx={8} fill={C.surface} stroke={color} strokeWidth="0.7"/>
-          <text x={x} y={y+1} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill={color} fontWeight="600">{name}</text></>}
-        {text&&<text x={x} y={y+(name?17:1)} textAnchor="middle" dominantBaseline="middle" fontSize="8.5" fill={C.sub}>{text}</text>}
-      </g>
-    );
+    const f=fz(10); const w=name?name.length*f*1.05+f*1.3:0; const h=f*1.75;
+    return (<g>
+      {name&&<><rect x={x-w/2} y={y-h/2} width={w} height={h} rx={h/2} fill={C.surface} stroke={color} strokeWidth="0.8"/>
+        <text x={x} y={y+f*0.05} textAnchor="middle" dominantBaseline="middle" fontSize={f} fill={color} fontWeight="600">{name}</text></>}
+      {text&&<text x={x} y={y+(name?h*0.95:0)} textAnchor="middle" dominantBaseline="middle" fontSize={f*0.92} fill={C.sub} style={{ paintOrder:"stroke",stroke:C.surface,strokeWidth:3 }}>{text}</text>}
+    </g>);
   };
+  const ctlBtn=(ic,label,fn)=>(<button key={label} onClick={fn} aria-label={label} title={label} style={{ width:36,height:36,borderRadius:18,border:`0.5px solid ${C.border}`,background:C.surface,boxShadow:"0 2px 8px rgba(0,0,0,0.12)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}><Ico n={ic} s={16} c={C.sub}/></button>);
 
   return (
     <div style={{ flex:1,overflowY:"auto",padding:12 }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8 }}>
-        <span style={{ fontFamily:C.display,fontSize:15,color:C.text,flexShrink:0 }}>相関図</span>
-        <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-          {moved&&<Btn small variant="ghost" onClick={onResetNodes}>整列に戻す</Btn>}
-          <select value={groupFilter} onChange={e=>{setGroupFilter(e.target.value);setSelectedId(null);}} style={{ ...IS(),width:"auto",maxWidth:160,padding:"6px 10px",fontSize:13 }}>
-            <option value="">すべての人物</option>
-            {data.groups.map(g=><option key={g.id} value={g.id}>{g.name||"（無名）"}</option>)}
-          </select>
-        </div>
+      <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:10,flexWrap:"wrap" }}>
+        <span style={{ fontFamily:C.display,fontSize:15,color:C.text,marginRight:"auto" }}>相関図</span>
+        <select value={groupFilter} onChange={e=>{setGroupFilter(e.target.value);setSelectedId(null);}} style={{ ...IS(),width:"auto",maxWidth:140,padding:"6px 10px",fontSize:12.5 }}>
+          <option value="">すべての人物</option>
+          {data.groups.map(g=><option key={g.id} value={g.id}>{g.name||"（無名）"}</option>)}
+        </select>
+        {n>=2&&<Btn small variant="primary" icon="plus" onClick={()=>{ setAddA(selectedId||""); setAddB(""); setAddOpen(true); }}>関係</Btn>}
       </div>
-      {chars.length<2?<div style={{ textAlign:"center",padding:"50px 20px",color:C.hint,fontSize:13 }}>人物を2人以上登録すると<br/>相関図が表示されます</div>:<>
-      <div style={{ background:C.surface,borderRadius:14,border:`0.5px solid ${C.border}`,marginBottom:8 }}>
-        <svg ref={svgRef} width="100%" viewBox={`0 0 ${size} ${size}`} style={{ display:"block",touchAction:"none" }} onClick={e=>{ if(e.target.tagName==="svg") setSelectedId(null); }}>
+      {n<2?<div style={{ textAlign:"center",padding:"50px 20px",color:C.hint,fontSize:13 }}>人物を2人以上登録すると<br/>相関図が表示されます</div>:<>
+      <div ref={boxRef} style={{ position:"relative",height:boxH,background:C.surface,borderRadius:14,border:`0.5px solid ${C.border}`,marginBottom:8,overflow:"hidden" }}>
+        <svg ref={svgRef} width="100%" height="100%" style={{ display:"block",touchAction:"none",userSelect:"none",WebkitUserSelect:"none" }}
+          onPointerDown={e=>onDown(e,null)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <defs>
             {data.relationTypes.map(t=>(<marker key={t.id} id={`ah_${t.id}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill={t.color}/></marker>))}
             <marker id="ah_plain" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill={C.hint}/></marker>
           </defs>
+          <g transform={`translate(${V.tx} ${V.ty}) scale(${V.k})`}>
           {edges.map((e,i)=>{ const pa=pos[e.a],pb=pos[e.b]; const act=edgeActive(e);
             const dx=pb.x-pa.x, dy=pb.y-pa.y, len=Math.sqrt(dx*dx+dy*dy)||1, ux=dx/len, uy=dy/len;
-            const nx=-uy, ny=ux;                                   // 線に垂直な向き
+            const nx=-uy, ny=ux;
             const sides=[];
             if(e.hasA) sides.push({ from:pa,to:pb,type:e.tA,text:e.textA,arrow:e.outA,line:e.lineA,sign:1 });
             if(e.hasB) sides.push({ from:pb,to:pa,type:e.tB,text:e.textB,arrow:e.outB,line:e.lineB,sign:-1 });
-            const off = sides.length>1 ? 5 : 0;
-            const sw  = act&&selectedId?2:1.4;
-            // 両方が同じ関係なら、丸いラベルは真ん中に1つだけ
+            const off = sides.length>1 ? 4 : 0;
+            const sw  = (act&&selectedId?2.2:1.5)/Math.max(V.k,0.8);
             const sameType = !!(e.tA&&e.tB&&e.tA.id===e.tB.id);
             const baseMid = { x:(pa.x+pb.x)/2, y:(pa.y+pb.y)/2 };
-            const baseDeg = Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
-            return (<g key={i} opacity={act?(selectedId?1:0.72):0.12}>
+            return (<g key={i} opacity={act?(selectedId?1:0.75):0.08}>
               {sides.length===0&&<line x1={pa.x+ux*(nodeR+3)} y1={pa.y+uy*(nodeR+3)} x2={pb.x-ux*(nodeR+3)} y2={pb.y-uy*(nodeR+3)} stroke={C.border} strokeWidth={sw}/>}
               {sides.map((sd,k)=>{
                 const ox=nx*off*sd.sign, oy=ny*off*sd.sign;
                 const fx=sd.from.x+ox, fy=sd.from.y+oy, tx=sd.to.x+ox, ty=sd.to.y+oy;
                 const ddx=tx-fx, ddy=ty-fy, dl=Math.sqrt(ddx*ddx+ddy*ddy)||1, dux=ddx/dl, duy=ddy/dl;
-                const x1=fx+dux*(nodeR+3), y1=fy+duy*(nodeR+3), x2=tx-dux*(nodeR+3), y2=ty-duy*(nodeR+3);
+                const x1=fx+dux*(nodeR+3), y1=fy+duy*(nodeR+3), x2=tx-dux*(nodeR+4), y2=ty-duy*(nodeR+4);
                 const col=sd.type?sd.type.color:C.hint;
                 const mid={x:(x1+x2)/2,y:(y1+y2)/2};
-                const deg=Math.atan2(y2-y1,x2-x1)*180/Math.PI;
                 const mk=sd.type?`ah_${sd.type.id}`:"ah_plain";
+                const glyph = sd.line==="heart"||sd.line==="cross";
+                // ラベルは線の真ん中から、向きごとに少し前後へずらして重ならないようにする
+                const lp = sameType ? null : { x:mid.x+(sides.length>1?dux*fz(16)*sd.sign*0:0)+nx*fz(11)*sd.sign*(sides.length>1?1:0), y:mid.y+ny*fz(11)*sd.sign*(sides.length>1?1:0)+(glyph?fz(14):0) };
                 return (<g key={k}>
                   {sd.line==="double"
                     ? <><line x1={x1+nx*1.6} y1={y1+ny*1.6} x2={x2+nx*1.6} y2={y2+ny*1.6} stroke={col} strokeWidth={sw}/>
                         <line x1={x1-nx*1.6} y1={y1-ny*1.6} x2={x2-nx*1.6} y2={y2-ny*1.6} stroke={col} strokeWidth={sw} markerEnd={sd.arrow?`url(#${mk})`:undefined}/></>
                     : <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth={sw} strokeDasharray={sd.line==="dashed"?"6 4":undefined} markerEnd={sd.arrow?`url(#${mk})`:undefined}/>}
-                  {(sd.line==="heart"||sd.line==="cross")&&<>
-                    <circle cx={mid.x} cy={mid.y} r="7.5" fill={C.surface} stroke={col} strokeWidth="0.7"/>
-                    <text x={mid.x} y={mid.y+0.5} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill={col}>{sd.line==="heart"?"♥":"✕"}</text>
+                  {glyph&&<>
+                    <circle cx={mid.x} cy={mid.y} r={fz(7.5)} fill={C.surface} stroke={col} strokeWidth="0.7"/>
+                    <text x={mid.x} y={mid.y+0.5} textAnchor="middle" dominantBaseline="middle" fontSize={fz(9)} fill={col}>{sd.line==="heart"?"♥":"✕"}</text>
                   </>}
-                  {act&&(()=>{
-                    const glyph = sd.line==="heart"||sd.line==="cross";
-                    const push  = sameType ? 15 : (glyph ? 14 : 0);   // 中央のラベルや記号を避ける
-                    return <EdgeLabel
-                      x={mid.x+nx*push*sd.sign} y={mid.y+ny*push*sd.sign} deg={deg} color={col}
-                      name={sameType?"":(sd.type?sd.type.name:"")} text={sd.text}/>;
-                  })()}
+                  {act&&showLabels&&lp&&<Label x={lp.x} y={lp.y} color={col} name={sd.type?sd.type.name:""} text={selectedId?sd.text:""}/>}
+                  {act&&selectedId&&sameType&&sd.text&&<text x={mid.x+nx*fz(15)*sd.sign} y={mid.y+ny*fz(15)*sd.sign} textAnchor="middle" dominantBaseline="middle" fontSize={fz(9.5)} fill={C.sub} style={{ paintOrder:"stroke",stroke:C.surface,strokeWidth:3 }}>{sd.text}</text>}
                 </g>);
               })}
-              {act&&sameType&&<EdgeLabel x={baseMid.x} y={baseMid.y} deg={baseDeg} color={e.tA.color} name={e.tA.name} text=""/>}
+              {act&&showLabels&&sameType&&<Label x={baseMid.x} y={baseMid.y} color={e.tA.color} name={e.tA.name} text=""/>}
             </g>); })}
-          {chars.map(c=>{ const p=pos[c.id]; const dim=isDim(c.id); const sel=c.id===selectedId; return (
-            <g key={c.id} style={{ cursor:"grab",touchAction:"none" }} opacity={dim?0.25:1}
-              onPointerDown={ev=>{ ev.currentTarget.setPointerCapture(ev.pointerId); dragRef.current={id:c.id,moved:false}; }}
-              onPointerMove={ev=>{ const d=dragRef.current; if(!d||d.id!==c.id) return; ev.preventDefault(); const q=toSvg(ev); d.moved=true; setDrafts(prev=>({...prev,[c.id]:{x:clamp(q.x)/size,y:clamp(q.y)/size}})); }}
-              onPointerUp={ev=>{ const d=dragRef.current; dragRef.current=null; if(!d) return;
-                if(d.moved){ setDrafts(prev=>{ const q=prev[c.id]; if(q&&onMoveNodes) onMoveNodes({[c.id]:q}); const n={...prev}; delete n[c.id]; return n; }); }
-                else setSelectedId(sel?null:c.id); }}>
-              {sel&&<circle cx={p.x} cy={p.y} r={nodeR+4} fill="none" stroke={C.accent} strokeWidth="2"/>}
-              <circle cx={p.x} cy={p.y} r={nodeR} fill={(c.imageColor||"#8EA3C3")} opacity={0.9}/>
+          {chars.map(c=>{ const p=pos[c.id]; const dim=isDim(c.id); const sel=c.id===selectedId; const f=fz(11); return (
+            <g key={c.id} style={{ cursor:"grab" }} opacity={dim?0.18:1} onPointerDown={e=>onDown(e,c.id)}>
+              <circle cx={p.x} cy={p.y} r={nodeR+10} fill="transparent"/>
+              {sel&&<circle cx={p.x} cy={p.y} r={nodeR+4} fill="none" stroke={C.accent} strokeWidth="2.2"/>}
+              <circle cx={p.x} cy={p.y} r={nodeR} fill={(c.imageColor||"#8EA3C3")}/>
               {c.image
                 ? <SvgImage href={c.image} x={p.x-nodeR} y={p.y-nodeR} width={nodeR*2} height={nodeR*2} clipPath={`circle(${nodeR}px at ${nodeR}px ${nodeR}px)`} preserveAspectRatio="xMidYMid slice"/>
-                : <text x={p.x} y={p.y+1} textAnchor="middle" dominantBaseline="middle" fontSize={nodeR*0.75} fill="#fff" fontWeight="700">{charInitial(c)}</text>}
-              <text x={p.x} y={p.y+nodeR+12} textAnchor="middle" fontSize="10" fill={C.text} fontWeight={sel?"700":"500"}>{charName(c).slice(0,6)}</text>
+                : <text x={p.x} y={p.y+1} textAnchor="middle" dominantBaseline="middle" fontSize={nodeR*0.8} fill="#fff" fontWeight="700" style={{ pointerEvents:"none" }}>{charInitial(c)}</text>}
+              <text x={p.x} y={p.y+nodeR+f*1.1} textAnchor="middle" fontSize={f} fill={C.text} fontWeight={sel?"700":"500"} style={{ paintOrder:"stroke",stroke:C.surface,strokeWidth:f*0.35,pointerEvents:"none" }}>{charName(c).length>8?charName(c).slice(0,8)+"…":charName(c)}</text>
             </g>
           ); })}
+          </g>
         </svg>
+        <div style={{ position:"absolute",right:10,bottom:10,display:"flex",flexDirection:"column",gap:6 }}>
+          {ctlBtn("plus","拡大",()=>zoomCenter(1.25))}
+          {ctlBtn("minus","縮小",()=>zoomCenter(0.8))}
+          {ctlBtn("expand","全体を表示",fit)}
+        </div>
+        {moved&&<button onClick={()=>{ onResetNodes&&onResetNodes(); setTimeout(fit,50); }} style={{ position:"absolute",left:10,bottom:10,padding:"7px 11px",borderRadius:16,border:`0.5px solid ${C.border}`,background:C.surface,color:C.sub,fontSize:11.5,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(0,0,0,0.1)" }}>自動で並べ直す</button>}
       </div>
-      <div style={{ textAlign:"center",fontSize:10.5,color:C.hint,padding:"0 0 10px" }}>ドラッグで配置を変えられます · タップで関係を表示</div>
-      {selChar?(
+      <div style={{ textAlign:"center",fontSize:10.5,color:C.hint,padding:"0 0 10px",lineHeight:1.7 }}>人物をドラッグで移動・背景をドラッグで画面を動かす・2本指で拡大縮小<br/>人物をタップすると、その人の関係だけが見られます</div>
+      {selChar&&(
         <div style={{ background:C.surface,borderRadius:14,border:`0.5px solid ${C.border}`,padding:"12px 14px" }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
             {selChar.image?<SImg src={selChar.image} style={{ width:32,height:32,borderRadius:"50%",objectFit:"cover" }}/>:<div style={{ width:32,height:32,borderRadius:"50%",background:(selChar.imageColor||"#ccc")+"30",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="person" s={16} c={selChar.imageColor||C.hint}/></div>}
@@ -1536,14 +1640,14 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
                 <div style={{ minWidth:0,flex:1 }}>
                   <div style={{ fontSize:13.5,color:C.text,marginBottom:3 }}>{charName(other)}</div>
                   <div style={{ display:"flex",flexWrap:"wrap",gap:4,alignItems:"center" }}>
-                    <span style={{ fontSize:10,color:C.hint }}>→</span>{(rel.text||tA)?<Tag label={rel.text||tA.name} color={tA?tA.color:null}/>:<span style={{ fontSize:10.5,color:C.hint }}>未設定</span>}
-                    <span style={{ fontSize:10,color:C.hint,marginLeft:4 }}>←</span>{((back&&back.text)||tB)?<Tag label={(back&&back.text)||tB.name} color={tB?tB.color:null}/>:<span style={{ fontSize:10.5,color:C.hint }}>未設定</span>}
+                    <span style={{ fontSize:10,color:C.hint }}>→</span>{(rel.text||tA)?<Tag label={rel.text||tA.name} color={tA?tA.color:null}/>:<span style={{ fontSize:10.5,color:C.hint }}>なし</span>}
+                    <span style={{ fontSize:10,color:C.hint,marginLeft:4 }}>←</span>{((back&&back.text)||tB)?<Tag label={(back&&back.text)||tB.name} color={tB?tB.color:null}/>:<span style={{ fontSize:10.5,color:C.hint }}>なし</span>}
                   </div>
                   {(rel.callName||rel.calledName)&&<div style={{ fontSize:11,color:C.sub,lineHeight:1.6,marginTop:3 }}>{rel.callName&&<span>「{rel.callName}」と呼ぶ</span>}{rel.callName&&rel.calledName&&<span style={{ color:C.hint }}> ／ </span>}{rel.calledName&&<span>「{rel.calledName}」と呼ばれる</span>}</div>}
                 </div>
                 <div style={{ display:"flex",alignItems:"center",gap:2,flexShrink:0 }}>
-                  <button onClick={()=>onEditRel&&onEditRel(selChar.id,other.id)} style={{ border:"none",background:"transparent",cursor:"pointer",padding:5,display:"flex" }}><Ico n="edit" s={14} c={C.sub}/></button>
-                  <button onClick={()=>setSelectedId(other.id)} style={{ border:"none",background:"transparent",cursor:"pointer",padding:5,display:"flex" }}><Ico n="chevR" s={14} c={C.hint}/></button>
+                  <button onClick={()=>onEditRel&&onEditRel(selChar.id,other.id)} aria-label="編集" style={{ border:"none",background:"transparent",cursor:"pointer",padding:6,display:"flex" }}><Ico n="edit" s={15} c={C.sub}/></button>
+                  <button onClick={()=>setSelectedId(other.id)} aria-label="この人を見る" style={{ border:"none",background:"transparent",cursor:"pointer",padding:6,display:"flex" }}><Ico n="chevR" s={15} c={C.hint}/></button>
                 </div>
               </div>
             ); })}
@@ -1551,8 +1655,13 @@ const RelationGraph = ({ data, onOpenChar, onEditRel, onMoveNodes, onResetNodes 
             <AdditiveLinker available={data.characters.filter(c=>c.id!==selChar.id&&!selChar.relatedCharacters.some(r=>r.charId===c.id))} onAdd={id=>onEditRel&&onEditRel(selChar.id,id)} getLabel={charName} getColor={c=>c.imageColor} placeholder="この人物に関係を追加"/>
           </div>
         </div>
-      ):(
-        <div style={{ textAlign:"center",fontSize:11,color:C.hint,padding:"4px 0" }}>人物をタップすると関係の詳細が見られます</div>
+      )}
+      {addOpen&&(
+        <Modal compact title="関係を追加" onClose={()=>setAddOpen(false)} footer={<><Btn small variant="ghost" onClick={()=>setAddOpen(false)}>やめる</Btn><div style={{ flex:1 }}/><Btn small variant="primary" onClick={()=>{ if(addA&&addB&&addA!==addB){ setAddOpen(false); onEditRel&&onEditRel(addA,addB); } }}>次へ</Btn></>}>
+          <Sel label="ひとり目" value={addA} onChange={setAddA} options={data.characters.map(c=>({value:c.id,label:charName(c)}))}/>
+          <Sel label="ふたり目" value={addB} onChange={setAddB} options={data.characters.filter(c=>c.id!==addA).map(c=>({value:c.id,label:charName(c)}))}/>
+          <div style={{ fontSize:11,color:C.hint,lineHeight:1.7 }}>すでに関係がある2人を選ぶと、その関係を編集できます。</div>
+        </Modal>
       )}
       </>}
     </div>
