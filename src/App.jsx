@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.17.1";
+const APP_VERSION = "0.17.2";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -2062,7 +2062,19 @@ const CalendarSettings = ({ data, upd }) => {
                 <button key={v} onClick={()=>set({display:v})} style={{ padding:"10px 4px",borderRadius:10,border:`1.5px solid ${cal.display===v?C.accent:C.border}`,background:cal.display===v?C.accent+"12":"transparent",color:cal.display===v?C.accent:C.sub,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>{l}</button>
               ))}
             </div>
-            <div style={{ fontSize:11,color:C.hint,lineHeight:1.8,marginTop:8 }}>例：{dateLabel(data,`${(cal.eras[0]&&cal.eras[0].y)||1}-01-01`)}</div>
+            {(()=>{ // 選んだ表示のしかたに合わせた例。暦の名前や元号がまだなら仮の名前で見せる
+              const eras=(cal.eras||[]).filter(e=>e&&e.name&&e.y);
+              const demo=!cal.yearLabel||!eras.length;
+              const pc={ ...cal, yearLabel:cal.yearLabel||"帝暦", eras:eras.length?eras:[{ id:"x", name:"新暦", y:500, m:1, d:1 }] };
+              const e0=pc.eras[pc.eras.length-1];
+              const ds=`${e0.y+19}-${Math.min(3,cal.months.length)}-1`;
+              const label=(mode)=>dateLabel({ ...data, calendar:{ ...pc, display:mode } },ds);
+              return (<div style={{ background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginTop:8 }}>
+                <div style={{ fontSize:10.5,color:C.hint,marginBottom:4 }}>例</div>
+                <div style={{ fontSize:13.5,color:C.text,fontWeight:600 }}>{label(cal.display||"both")}</div>
+                {demo&&<div style={{ fontSize:10.5,color:C.hint,lineHeight:1.7,marginTop:5 }}>{!cal.yearLabel&&!eras.length?"「帝暦」「新暦」は仮の名前です。":!cal.yearLabel?"「帝暦」は仮の名前です。":"「新暦」は仮の元号です。"}暦の名前や元号を決めると、ここに反映されます。</div>}
+              </div>);
+            })()}
           </Field>
 
           <Divider/>
