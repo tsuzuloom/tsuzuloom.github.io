@@ -3716,8 +3716,15 @@ const findSolo = (data, c) => {
   if(topLoc&&topLoc[1]>=2){ const l=data.locations.find(x=>x.id===topLoc[0]); if(l) add("place",`よく「${l.name||"（無名）"}」に出てくる`,`「${l.name||"（無名）"}」での、${N}の何気ない日常の話は？`); }
   // 登場
   if(data.scenes.length&&!my.length) add("scene","まだ一度もシーンに出ていない",`${N}の初登場の場面は？`);
-  else if(now&&my.length){ const dated=my.filter(s=>s.startDate&&dI(s.startDate)!=null).sort((x,y)=>dI(y.startDate)-dI(x.startDate));
-    if(dated.length){ const gap=dI(data.nowDate)-dI(dated[0].startDate); if(gap>=365) add("scene",`最後の登場から${Math.floor(gap/365)}年以上`,`最後の登場（${dated[0].title||"無題のシーン"}）から、${N}は何をしていた？`); } }
+  else if(my.length>=2){
+    // 登場と登場のあいだが大きく空いているところ（大きい順に2つまで）
+    const yl=custom?calYearDays(cal):365, ml=yl/(custom?(cal.months.length||12):12);
+    const span=(g)=>g>=yl?`約${Math.round(g/yl)}年`:`約${Math.max(1,Math.round(g/ml))}か月`;
+    const dated=my.filter(s=>s.startDate&&dI(s.startDate)!=null).sort((x,y)=>dI(x.startDate)-dI(y.startDate));
+    const gaps=[]; for(let i=1;i<dated.length;i++){ const g=dI(dated[i].startDate)-dI(dated[i-1].startDate); if(g>=yl/4) gaps.push({ g, a:dated[i-1], b:dated[i] }); }
+    gaps.sort((x,y)=>y.g-x.g).slice(0,2).forEach(({g,a,b})=>{ const ta=a.title||"無題のシーン", tb=b.title||"無題のシーン";
+      add("scene",`「${ta}」と「${tb}」のあいだが${span(g)}`,`「${ta}」から「${tb}」までの${span(g)}、${N}は何をしていた？`); });
+  }
   if(c.deathDate) add("death","亡くなっている",`${N}が亡くなる前の日の話は？`);
   return out;
 };
