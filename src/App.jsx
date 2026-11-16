@@ -2054,12 +2054,13 @@ const CalendarSettings = ({ data, upd }) => {
         </div>
 
         {cal.enabled&&<>
-          <Inp label="基準の暦の名前" value={cal.yearLabel} onChange={v=>set({yearLabel:v})} placeholder="例：帝暦（空でも可）"/>
+          <Inp label="基準の暦の名前（西暦にあたるもの）" value={cal.yearLabel} onChange={v=>set({yearLabel:v})} placeholder="例：帝暦（空でも可）"/>
 
           <Field label="表示のしかた">
+            <div style={{ fontSize:11,color:C.hint,lineHeight:1.8,margin:"-2px 0 8px" }}>元号は「令和」「平成」のような和暦、基準の暦は西暦にあたります。</div>
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6 }}>
-              {[["both","併記"],["era","元号だけ"],["base","基準暦だけ"]].map(([v,l])=>(
-                <button key={v} onClick={()=>set({display:v})} style={{ padding:"10px 4px",borderRadius:10,border:`1.5px solid ${cal.display===v?C.accent:C.border}`,background:cal.display===v?C.accent+"12":"transparent",color:cal.display===v?C.accent:C.sub,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>{l}</button>
+              {[["both","併記","和暦（西暦）"],["era","元号だけ","和暦のように"],["base","基準暦だけ","西暦のように"]].map(([v,l,sub])=>(
+                <button key={v} onClick={()=>set({display:v})} style={{ padding:"8px 4px",borderRadius:10,border:`1.5px solid ${cal.display===v?C.accent:C.border}`,background:cal.display===v?C.accent+"12":"transparent",color:cal.display===v?C.accent:C.sub,fontSize:12,cursor:"pointer",fontFamily:"inherit",lineHeight:1.5 }}>{l}<br/><span style={{ fontSize:10,opacity:0.75 }}>{sub}</span></button>
               ))}
             </div>
             {(()=>{ // 選んだ表示のしかたに合わせた例。暦の名前や元号がまだなら仮の名前で見せる
@@ -2095,7 +2096,7 @@ const CalendarSettings = ({ data, upd }) => {
           </div>
 
           <Divider/>
-          <Lbl>元号</Lbl>
+          <Lbl>元号（和暦にあたるもの）</Lbl>
           <div style={{ fontSize:11,color:C.hint,lineHeight:1.8,margin:"0 0 10px" }}>始まった日を決めると、そこから先の日付が自動でその元号で表示されます。年の途中で改元しても正しく数えます。</div>
           {cal.eras.length===0&&<div style={{ fontSize:12,color:C.hint,padding:"4px 0 10px" }}>元号はまだありません。無くてもかまいません。</div>}
           {cal.eras.map((e,i)=>(
