@@ -8,6 +8,10 @@ import { AppIcon } from '@capacitor-community/app-icon';
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
 const APP_VERSION = "0.17.2";
+// アップデート後に最初に開いたとき出すお知らせ。文言はオーナーに確認してから入れる。
+// { version:"x.y.z", title:"…", items:["…"] } 空なら何も出さない
+const WHATS_NEW = null;
+const SEEN_KEY = "tl_seen_version";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -4168,6 +4172,14 @@ function App() {
   const [isPremium,setIsPremium]=useState(localStorage.getItem("tl_prem")==="1");
   const metaSettingsRef=useRef({});
   const [limitBox,setLimitBox]=useState(null);   // "stories" | "images"
+  // アップデートのお知らせ：前に開いたバージョンと違い、お知らせが用意されていれば1回だけ出す
+  const [newsOpen,setNewsOpen]=useState(()=>{ try {
+    const seen=localStorage.getItem(SEEN_KEY);
+    if(!seen){ localStorage.setItem(SEEN_KEY,APP_VERSION); return false; }   // はじめて使う人には出さない（はじめての案内があるため）
+    return !!(WHATS_NEW&&WHATS_NEW.version===APP_VERSION&&seen!==APP_VERSION);
+  } catch(e){ return false; } });
+  const closeNews=()=>{ try { localStorage.setItem(SEEN_KEY,APP_VERSION); } catch(e){} setNewsOpen(false); };
+  useEffect(()=>{ if(!newsOpen){ try { localStorage.setItem(SEEN_KEY,APP_VERSION); } catch(e){} } },[newsOpen]);
   const [introOpen,setIntroOpen]=useState(()=>{ try { return localStorage.getItem(INTRO_KEY)!=="1"; } catch(e){ return false; } });
   const [, forceRender]=useState(0);
 
@@ -4547,6 +4559,11 @@ function App() {
       {limitBox&&<Modal compact title="無料プランでは、ここまで使えます" onClose={()=>setLimitBox(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setLimitBox(null)}>OK</Btn></>}>
         <div style={{ fontSize:13,color:C.text,lineHeight:1.95 }}>作品は{PLAN.maxStories}作、画像は{PLAN.maxImages}枚まで、無料で保存できます。<br/>今ある作品や画像は、これまでどおり見たり書き足したりできるので、安心してくださいね。</div>
         <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginTop:10 }}>これより多く{limitBox==="images"?"画像を":"作品を"}保存したいときは、プレミアムプランをご検討ください。いただいた料金は、作品を安全に保管するサーバーの運営に使い、アプリを長く続けていくための支えにさせていただきます。</div>
+      </Modal>}
+      {newsOpen&&!introOpen&&WHATS_NEW&&<Modal compact title={WHATS_NEW.title} onClose={closeNews} footer={<><Btn small variant="ghost" onClick={()=>{ openExternal(DOCS_URL+"changelog.html"); }}>くわしく見る</Btn><div style={{ flex:1 }}/><Btn variant="primary" onClick={closeNews}>OK</Btn></>}>
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>{WHATS_NEW.items.map((t,i)=>(
+          <div key={i} style={{ display:"flex",gap:9,alignItems:"flex-start" }}><div style={{ marginTop:3,flexShrink:0 }}><Ico n="check" s={14} c={C.accent}/></div><span style={{ fontSize:13,color:C.text,lineHeight:1.8 }}>{t}</span></div>
+        ))}</div>
       </Modal>}
       {screen==="list"&&introOpen&&stories&&<WelcomeIntro onClose={()=>setIntroOpen(false)} hasSample={stories.some(x=>/^見本/.test(x.title||""))} onOpenSample={()=>{ const sm=stories.find(x=>/^見本/.test(x.title||"")); if(sm) openStory(sm.id); }}/>}
       {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>{ setSection(null); setScreen("settings"); }} onOpenIdeas={()=>setScreen("ideas")}/>}
