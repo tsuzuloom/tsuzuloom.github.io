@@ -759,7 +759,7 @@ const LoginScreen = ({ onDemo }) => {
           {mode!=="login"&&<button onClick={()=>{setMode("login");say("");}} style={{ background:"none",border:"none",color:C.hint,fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px 0" }}>← ログインに戻る</button>}
         </div>
         <div style={{ marginTop:16,padding:"11px 12px",borderRadius:10,background:C.bg,border:`0.5px solid ${C.borderL}`,fontSize:10.5,color:C.hint,lineHeight:1.85,textAlign:"left" }}>
-          作品は暗号化された通信で保存され、運営者が中身を見たり、AIの学習に使ったりすることはありません。<br/>
+          作品は暗号化された通信で保存され、あなたのアカウントからだけ開けます。<br/>
           <a href="https://tsuzuloom.github.io/docs/about.html" target="_blank" rel="noopener" style={{ color:C.sub }}>このアプリについて</a>　<a href="https://tsuzuloom.github.io/docs/privacy.html" target="_blank" rel="noopener" style={{ color:C.sub }}>プライバシーポリシー</a>
         </div>
       </div>
@@ -2845,7 +2845,7 @@ const INTRO_PAGES = [
   { art:"welcome", title:"Tsuzu Loom へようこそ", body:"増えていくキャラと設定を、作品ごとにひとつの部屋にまとめる創作アプリです。\n思いついたところから、少しずつ書き足していけます。" },
   { art:"people", title:"人物とつながり", body:"人物ごとに、プロフィール・誕生日・能力値などをまとめられます。\n相関図と家系図は、登録したつながりから自動で描かれます。" },
   { art:"time", title:"年表と、独自の暦", body:"シーンや出来事を時間の順に並べて、その時の年齢まで自動で表示します。\n作品だけの暦や元号を作ることもできます。" },
-  { art:"safe", title:"安心して書けるように", list:["書いた内容は自動で保存。電波がなくても書けます","消した作品は、ゴミ箱から30日間もとに戻せます","運営者が作品を見たり、AIの学習に使ったりすることはありません"] },
+  { art:"safe", title:"安心して書けるように", list:["書いた内容は自動で保存。電波がなくても書けます","消した作品は、ゴミ箱から30日間もとに戻せます","パソコンのWeb版でも、同じ作品を開いて続きを書けます"] },
 ];
 // 課金が始まったら、案内の最後に料金の考え方を添える
 const INTRO_PLAN_PAGE = { art:"plan", title:"無料プランでできること", sections:[
@@ -3970,7 +3970,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       <SetRow icon="mail" label="メールアドレスを変更" onClick={()=>setMailOpen(true)}/>
       <SetRow icon="logout" label="ログアウト" onClick={onLogout} right={null} last/>
     </SetGroup>
-    {note("作品は暗号化された通信で保存されます。運営者が作品の中身を見たり、AIの学習に使ったりすることはありません。")}
+    {note("作品は暗号化された通信で保存され、あなたのアカウントからだけ開けます。")}
     <SetGroup>
       <SetRow icon="trash" label="アカウントを削除" danger onClick={()=>setDelOpen(true)} right={null} last/>
     </SetGroup>
