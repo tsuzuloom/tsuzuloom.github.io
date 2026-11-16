@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.17.2";
+const APP_VERSION = "0.18.0";
 // アップデート後に最初に開いたとき出すお知らせ。文言はオーナーに確認してから入れる。
 // { version:"x.y.z", title:"…", items:["…"] } 空なら何も出さない
 const WHATS_NEW = null;
@@ -2309,7 +2309,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
   const [confirmBox,setConfirmBox]=useState(null);
   const [searchOpen,setSearchOpen]=useState(false);
   const [charViewId,setCharViewId]=useState((route&&route.charId)||null);
-  const [charLayout,setCharLayout]=useState(localStorage.getItem("tl_charLayout")||"list");
+  const [charLayout,setCharLayout]=useState(localStorage.getItem("tl_charLayout")==="face"?"face":"list");
   const [charSort,setCharSort]=useState({key:"manual",asc:true});
   const [charFilterOpen,setCharFilterOpen]=useState(false);
   const [charFilter,setCharFilter]=useState({chapterId:"",groupId:"",params:{}});
@@ -2454,16 +2454,16 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     { key:"write", label:"執筆",   icon:"pencil", subs:["chapters","scenes"] },
     { key:"cast",  label:"人物",   icon:"person", view:"characters" },
     { key:"world", label:"世界観", icon:"world",  subs:["groups","locations","terms"] },
-    { key:"link",  label:"関係",   icon:"share",  subs:["graph","family","pairs"] },
+    { key:"link",  label:"関係",   icon:"share",  subs:["graph","family"] },
     { key:"time",  label:"年表",   icon:"calendar", view:"timeline" },
   ];
-  const MORE = ["count","calendar","genders","parameters","abilityParams","relationTypes","storySettings"];
+  const MORE = ["pairs","count","calendar","genders","parameters","abilityParams","relationTypes","storySettings"];
   // 画面を切り替えてもスクロール位置が残るよう、タブの中身は常に生かしておく
-  const LIVE_KEYS = ["chapters","scenes","characters","groups","locations","terms","graph","family","pairs","timeline"];
+  const LIVE_KEYS = ["chapters","scenes","characters","groups","locations","terms","graph","family","timeline"];
 
   const layoutToggle=(
     <div style={{ display:"flex",background:C.bg,borderRadius:9,padding:2 }}>
-      {[["list","list"],["grid","grid"],["face","person"]].map(([k,ic])=>(
+      {[["list","list"],["face","person"]].map(([k,ic])=>(
         <button key={k} onClick={()=>setLayout(k)} style={{ width:32,height:27,borderRadius:7,border:"none",background:charLayout===k?C.surface:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:charLayout===k?"0 1px 2px rgba(0,0,0,0.08)":"none" }}><Ico n={ic} s={14} c={charLayout===k?C.text:C.hint}/></button>
       ))}
     </div>
@@ -2583,7 +2583,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
     </div>
   );
 
-  const charListEl = <EntityList title="人物" icon="person" iconColor={SECTIONS.characters.color} items={shownChars} onAdd={()=>setModal({type:"character"})} onEdit={it=>openChar(it.id)} onDelete={id=>del("characters",id)} renderName={charName} renderImage={c=>c.image||null} renderSubtitle={c=>{const g=data.genders.find(x=>x.id===c.genderId);return[g?g.name:null,ageText(data,c),c.birthday?`${dateLabel(data,c.birthday)}生`:null].filter(Boolean).join(" · ")||null;}} renderTags={c=>c.relatedGroups.slice(0,2).map(r=>{const g=data.groups.find(x=>x.id===r.groupId);return g?{label:r.position?`${g.name}（${r.position}）`:g.name}:null;}).filter(Boolean)} onMoveUp={canReorder?(i=>moveEntity("characters",i,-1)):undefined} onMoveDown={canReorder?(i=>moveEntity("characters",i,1)):undefined} headerExtra={layoutToggle} subHeader={charSortBar} emptyEl={charFilterActive?charFilterEmpty:undefined} body={charLayout==="grid"?<CharacterGrid chars={shownChars} data={data} onOpen={c=>openChar(c.id)}/>:charLayout==="face"?<FaceGrid chars={shownChars} onOpen={c=>openChar(c.id)}/>:undefined}/>;
+  const charListEl = <EntityList title="人物" icon="person" iconColor={SECTIONS.characters.color} items={shownChars} onAdd={()=>setModal({type:"character"})} onEdit={it=>openChar(it.id)} onDelete={id=>del("characters",id)} renderName={charName} renderImage={c=>c.image||null} renderSubtitle={c=>{const g=data.genders.find(x=>x.id===c.genderId);return[g?g.name:null,ageText(data,c),c.birthday?`${dateLabel(data,c.birthday)}生`:null].filter(Boolean).join(" · ")||null;}} renderTags={c=>c.relatedGroups.slice(0,2).map(r=>{const g=data.groups.find(x=>x.id===r.groupId);return g?{label:r.position?`${g.name}（${r.position}）`:g.name}:null;}).filter(Boolean)} onMoveUp={canReorder?(i=>moveEntity("characters",i,-1)):undefined} onMoveDown={canReorder?(i=>moveEntity("characters",i,1)):undefined} headerExtra={layoutToggle} subHeader={charSortBar} emptyEl={charFilterActive?charFilterEmpty:undefined} body={charLayout==="face"?<FaceGrid chars={shownChars} onOpen={c=>openChar(c.id)}/>:undefined}/>;
 
   const simpleList=(key,extra)=>{ const sc=SECTIONS[key]; return <EntityList title={sc.label} icon={sc.icon} iconColor={sc.color} items={data[key]} onAdd={()=>setModal({type:extra.modal})} onEdit={it=>setModal({type:extra.modal,item:it})} onDelete={extra.onDelete||(id=>del(key,id))} renderName={extra.renderName} renderSubtitle={extra.renderSubtitle} onMoveUp={i=>moveEntity(key,i,-1)} onMoveDown={i=>moveEntity(key,i,1)} headerExtra={extra.headerExtra}/>; };
 
@@ -2593,7 +2593,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "count": return <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",paddingTop:12 }}><WordCountView data={data}/></div>;
       case "characters": return charListEl;
       case "graph": return <RelationGraph data={data} onOpenChar={ch=>openChar(ch.id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})} onMoveNodes={moveNodes} onResetNodes={resetNodes}/>;
-      case "pairs": return <PairFinder isPremium={isPremium} data={data} onSaveIdea={onSaveIdea} onOpenChar={id=>openChar(id)}/>;
+      case "pairs": return <NetaFinder data={data} onSaveIdea={onSaveIdea} onOpenChar={id=>openChar(id)}/>;
       case "family": return <FamilyTreeView data={data} isPremium={true} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
       case "timeline": return <TimelineView data={data} onEditScene={sc=>setModal({type:"scene",item:sc})} onEditEvent={ev=>setModal({type:"event",item:ev})} onAddEvent={()=>setModal({type:"event"})} onOpenChar={id=>openChar(id)}/>;
       case "scenes": return simpleList("scenes",{modal:"scene",renderName:s=>s.title||"（無題）",renderSubtitle:s=>{const ch=data.chapters.find(c=>c.id===s.relatedChapterId);return[dateLabel(data,s.startDate),ch?ch.title:null,s.script?`${countChars(s.script)}字`:null].filter(Boolean).join(" · ")||null;}});
@@ -2724,7 +2724,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
           {sideLabel("世界観")}
           {["groups","locations","terms"].map(k=>sideItem(k))}
           {sideLabel("見取り図")}
-          {["graph","family","pairs","timeline"].filter(k=>!(k==="pairs"&&!SHOW_PREMIUM&&!isPremium)).map(k=>sideItem(k))}
+          {["graph","family","timeline"].map(k=>sideItem(k))}
           {sideLabel("その他")}
           {MORE.map(k=>sideItem(k))}
         </div>
@@ -2764,7 +2764,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       {saveStatus==="error"&&<div style={{ padding:"7px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0,display:"flex",justifyContent:"center" }}><SaveMark/></div>}
       {offlineBar}
       {!defView&&<div style={{ padding:"4px 12px 0",fontSize:10.5,color:C.hint,letterSpacing:"0.06em",flexShrink:0 }}>{tab.label} / {SECTIONS[currentKey].label}</div>}
-      {!defView&&tab.subs&&<div style={{ padding:"8px 12px 0",flexShrink:0 }}><Tabs tabs={tab.subs.filter(k=>!(k==="pairs"&&!SHOW_PREMIUM&&!isPremium)).map(k=>({key:k,label:SECTIONS[k].label}))} active={currentKey} onChange={k=>goSection(k)}/></div>}
+      {!defView&&tab.subs&&<div style={{ padding:"8px 12px 0",flexShrink:0 }}><Tabs tabs={tab.subs.map(k=>({key:k,label:SECTIONS[k].label}))} active={currentKey} onChange={k=>goSection(k)}/></div>}
       <div style={{ flex:1,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,position:"relative" }}>
         {defView
           ? viewEl(defView)
@@ -2787,7 +2787,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
             <span style={{ fontFamily:C.display,fontSize:16,color:C.text }}>その他</span>
           </div>
           <div style={{ flex:1,overflowY:"auto" }}>
-            <div style={{ fontSize:11,color:C.hint,lineHeight:1.8,padding:"14px 16px 6px" }}>人物ページに出る項目の定義や、作品全体の設定はここにあります。</div>
+            <div style={{ fontSize:11,color:C.hint,lineHeight:1.8,padding:"14px 16px 6px" }}>ネタさがしと、人物ページに出る項目の定義、作品全体の設定はここにあります。</div>
             {MORE.map(k=>(
               <button key={k} onClick={()=>{ goSection(k); setDefOpen(false); }} style={{ width:"100%",padding:"15px 16px",display:"flex",alignItems:"center",gap:12,background:C.surface,border:"none",borderBottom:`0.5px solid ${C.borderL}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
                 <Ico n={SECTIONS[k].icon} s={17} c={C.hint}/>
@@ -3616,19 +3616,19 @@ const findCommon = (data, a, b) => {
 const hasRelation=(data,a,b)=>a.relatedCharacters.some(r=>r.charId===b.id)||b.relatedCharacters.some(r=>r.charId===a.id)||(data.family||[]).some(l=>(l.a===a.id&&l.b===b.id)||(l.a===b.id&&l.b===a.id));
 const sharedScenes=(data,a,b)=>data.scenes.filter(s=>s.relatedCharacters.includes(a.id)&&s.relatedCharacters.includes(b.id)).length;
 
-const CommonList = ({ data, a, b, onSaveIdea, saved, setSaved }) => {
-  const list=findCommon(data,a,b);
+const CommonList = ({ data, a, b, onSaveIdea, saved, setSaved, only }) => {
+  const list=findCommon(data,a,b).filter(x=>!only||only(x));
   const nonNeta=list.filter(x=>!x.neta), neta=list.filter(x=>x.neta);
   if(!list.length) return <div style={{ fontSize:12.5,color:C.hint,lineHeight:1.9,padding:"14px 2px" }}>共通点が見つかりませんでした。<br/>自由項目・誕生日・所属・能力値などを入れていくと、見つかるようになります。</div>;
   return (<div>
     {!hasRelation(data,a,b)&&<div style={{ fontSize:11.5,color:C.accent,background:C.accent+"12",borderRadius:10,padding:"8px 11px",marginBottom:10 }}>この2人には、まだ関係がありません</div>}
     {nonNeta.map(x=><div key={x.key} style={{ fontSize:12,color:C.sub,padding:"4px 2px" }}>・{x.label}</div>)}
-    {neta.map(x=>{ const done=saved[x.key]; return (
+    {neta.map(x=>{ const sk=a.id+b.id+x.key; const done=saved[sk]; return (
       <div key={x.key} style={{ padding:"10px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
         <div style={{ fontSize:13,color:C.text,fontWeight:600,marginBottom:3 }}>{x.label}</div>
         <div style={{ display:"flex",gap:8,alignItems:"flex-start" }}>
           <div style={{ flex:1,fontSize:12,color:C.sub,lineHeight:1.75 }}>{x.neta}</div>
-          <button onClick={()=>{ if(done) return; onSaveIdea(x.neta,[a.id,b.id]); setSaved(s=>({...s,[x.key]:true})); }} style={{ flexShrink:0,display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:16,border:`0.5px solid ${done?C.border:C.accent}`,background:done?"transparent":C.accent+"12",color:done?C.hint:C.accent,fontSize:11.5,cursor:done?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}><Ico n={done?"check":"bulb"} s={12} c={done?C.hint:C.accent}/>{done?"保存しました":"ネタにする"}</button>
+          <button onClick={()=>{ if(done) return; onSaveIdea(x.neta,[a.id,b.id]); setSaved(s=>({...s,[sk]:true})); }} style={{ flexShrink:0,display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:16,border:`0.5px solid ${done?C.border:C.accent}`,background:done?"transparent":C.accent+"12",color:done?C.hint:C.accent,fontSize:11.5,cursor:done?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}><Ico n={done?"check":"bulb"} s={12} c={done?C.hint:C.accent}/>{done?"保存しました":"ネタにする"}</button>
         </div>
       </div>
     ); })}
@@ -3766,50 +3766,91 @@ const CommonFinder = ({ data, char, onClose, onSaveIdea, initialOther }) => {
   );
 };
 
-// 関係タブ：まだ絡んでいない2人
-const PairFinder = ({ data, onSaveIdea, onOpenChar, isPremium }) => {
+// ネタさがし：作品全体から、人物ごと・2人の組み合わせごとにネタを一覧する
+const NETA_CATS = [
+  ["all","すべて",null],
+  ["birth","誕生日・年齢",["holiday","bday","age","birth"]],
+  ["param","自由項目",["param","blank"]],
+  ["ability","能力値",["ability"]],
+  ["rel","関係・家族",["rel","family","friend"]],
+  ["world","所属・場所・用語",["group","term","place"]],
+  ["scene","登場",["scene","death"]],
+];
+const netaIn=(cat)=>{ const c=NETA_CATS.find(x=>x[0]===cat); return (x)=>!c||!c[2]||c[2].includes(x.kind); };
+const NetaItem = ({ x, done, onSave }) => (
+  <div style={{ padding:"10px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
+    <div style={{ fontSize:13,color:C.text,fontWeight:600,marginBottom:3 }}>{x.label}</div>
+    <div style={{ display:"flex",gap:8,alignItems:"flex-start" }}>
+      <div style={{ flex:1,fontSize:12,color:C.sub,lineHeight:1.75 }}>{x.neta}</div>
+      <button onClick={()=>{ if(!done) onSave(); }} style={{ flexShrink:0,display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:16,border:`0.5px solid ${done?C.border:C.accent}`,background:done?"transparent":C.accent+"12",color:done?C.hint:C.accent,fontSize:11.5,cursor:done?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}><Ico n={done?"check":"bulb"} s={12} c={done?C.hint:C.accent}/>{done?"保存しました":"ネタにする"}</button>
+    </div>
+  </div>
+);
+const NetaFinder = ({ data, onSaveIdea, onOpenChar }) => {
+  const [tab,setTab]=useState("solo");
+  const [cat,setCat]=useState("all");
+  const [who,setWho]=useState("");
+  const [sort,setSort]=useState("many");
   const [includeRel,setIncludeRel]=useState(false);
   const [open,setOpen]=useState(null);
   const [saved,setSaved]=useState({});
   const cs=data.characters;
-  const pairs=useMemo(()=>{ const out=[]; for(let i=0;i<cs.length;i++) for(let j=i+1;j<cs.length;j++){ const a=cs[i], b=cs[j];
+  const only=netaIn(cat);
+  const solos=useMemo(()=>{
+    const out=cs.filter(c=>!who||c.id===who).map((c,i)=>({ c, i, list:findSolo(data,c).filter(x=>x.neta&&only(x)) })).filter(x=>x.list.length);
+    return sort==="many"?out.sort((x,y)=>y.list.length-x.list.length||x.i-y.i):out;
+  },[data,who,cat,sort]);
+  const pairs=useMemo(()=>{ if(tab!=="pair") return []; const out=[]; for(let i=0;i<cs.length;i++) for(let j=i+1;j<cs.length;j++){ const a=cs[i], b=cs[j];
+      if(who&&a.id!==who&&b.id!==who) continue;
       const rel=hasRelation(data,a,b), sh=sharedScenes(data,a,b);
       if(!includeRel&&(rel||sh)) continue;
-      const list=findCommon(data,a,b).filter(x=>x.kind!=="scene"); if(!list.length) continue;
-      out.push({ a,b,list,rel,sh }); }
-    return out.sort((x,y)=>y.list.length-x.list.length).slice(0,60); },[data,includeRel]);
-  if(!isPremium) return (
-    <div style={{ flex:1,overflowY:"auto",padding:"40px 22px",textAlign:"center" }}>
-      <div style={{ width:74,height:74,borderRadius:24,background:C.tag,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px" }}><Ico n="bulb" s={32} c={C.hint} sw={1.3}/></div>
-      <div style={{ fontFamily:C.display,fontSize:17,color:C.text,marginBottom:8 }}>ネタさがし</div>
-      <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginBottom:14 }}>作品の全員を比べて、関係も一緒のシーンもないのに<br/>共通点がある「まだ絡んでいない2人」を見つけます。</div>
-      <div style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,background:C.tag,fontSize:11.5,color:C.tagTxt,marginBottom:14 }}><Ico n="lock" s={12} c={C.tagTxt}/>プレミアム機能（準備中）</div>
-      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.9 }}>ひとりずつのネタや、2人の共通点は、<br/>人物ページの「ネタをさがす」から無料で使えます。</div>
-    </div>
-  );
+      const list=findCommon(data,a,b).filter(x=>x.kind!=="scene"&&x.neta&&only(x)); if(!list.length) continue;
+      out.push({ a,b,list,rel,sh,o:i*1000+j }); }
+    return (sort==="many"?out.sort((x,y)=>y.list.length-x.list.length||x.o-y.o):out).slice(0,80); },[data,includeRel,who,cat,sort,tab]);
+  const save=(key,text,ids)=>{ onSaveIdea(text,ids); setSaved(s=>({...s,[key]:true})); };
+  const chip=(on)=>({ flexShrink:0,padding:"6px 11px",borderRadius:16,border:`0.5px solid ${on?"transparent":C.border}`,background:on?C.accent:"transparent",color:on?"#fff":C.sub,fontSize:11.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" });
+  const selStyle={ ...IS(),cursor:"pointer",padding:"7px 10px",fontSize:12.5,minHeight:36 };
+  const card=(k,head,sub,count,body)=>{ const isOpen=open===k; return (
+    <div key={k} style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden" }}>
+      <button onClick={()=>setOpen(isOpen?null:k)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 12px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
+        {head}
+        <div style={{ flex:1,minWidth:0 }}>{sub}</div>
+        <span style={{ fontSize:11,color:C.accent,background:C.accent+"14",borderRadius:10,padding:"2px 8px",flexShrink:0 }}>{count}</span>
+        <Ico n={isOpen?"chevU":"chevD"} s={14} c={C.hint}/>
+      </button>
+      {isOpen&&<div style={{ padding:"0 12px 10px" }}>{body}</div>}
+    </div>); };
+  const line=(t,s2)=><><div style={{ fontSize:13,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{t}</div><div style={{ fontSize:11,color:C.hint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{s2}</div></>;
   return (
     <div style={{ flex:1,overflowY:"auto",padding:12 }}>
-      <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-        <span style={{ fontFamily:C.display,fontSize:15,color:C.text,marginRight:"auto" }}>ネタさがし</span>
-        <button onClick={()=>setIncludeRel(v=>!v)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:C.sub,padding:4 }}><Toggle on={includeRel}/>関係がある2人も</button>
+      <div style={{ fontFamily:C.display,fontSize:15,color:C.text,marginBottom:4 }}>ネタさがし</div>
+      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:10 }}>入っている設定から、小話や番外編の種になりそうなことを集めています。</div>
+      <div style={{ display:"flex",background:C.tag,borderRadius:10,padding:3,marginBottom:10 }}>
+        {[["solo","人物ごと"],["pair","2人の組み合わせ"]].map(([k,l])=><button key={k} onClick={()=>{ setTab(k); setOpen(null); }} style={{ flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:tab===k?C.surface:"transparent",color:tab===k?C.text:C.sub,fontSize:12.5,fontWeight:tab===k?600:400,cursor:"pointer",fontFamily:"inherit",boxShadow:tab===k?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{l}</button>)}
       </div>
-      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:12 }}>{includeRel?"共通点の多い2人の順に並べています。":"関係も一緒のシーンもないのに、共通点がある2人です。番外編や小話のネタにどうぞ。"}</div>
-      {cs.length<2?<div style={{ textAlign:"center",padding:"40px 20px",color:C.hint,fontSize:13 }}>人物を2人以上登録すると使えます</div>
+      <div style={{ display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:4 }}>
+        {NETA_CATS.map(([k,l])=><button key={k} onClick={()=>{ setCat(k); setOpen(null); }} style={chip(cat===k)}>{l}</button>)}
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:8,marginBottom:8 }}>
+        <select value={who} onChange={e=>{ setWho(e.target.value); setOpen(null); }} style={selStyle}><option value="">人物：全員</option>{cs.map(c=><option key={c.id} value={c.id}>{charName(c)}</option>)}</select>
+        <select value={sort} onChange={e=>setSort(e.target.value)} style={selStyle}><option value="many">ネタの多い順</option><option value="order">登録順</option></select>
+      </div>
+      {tab==="pair"&&<button onClick={()=>setIncludeRel(v=>!v)} style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:C.sub,padding:"2px 0 10px" }}><Toggle on={includeRel}/>関係がある2人も含める</button>}
+      {tab==="pair"&&<div style={{ fontSize:11.5,color:C.hint,lineHeight:1.8,marginBottom:10 }}>{includeRel?"共通点のある2人です。":"関係も一緒のシーンもないのに、共通点がある2人です。"}</div>}
+      {cs.length===0?<div style={{ textAlign:"center",padding:"40px 20px",color:C.hint,fontSize:13 }}>人物を登録すると使えます</div>
+      :tab==="solo"?(solos.length===0
+        ?<div style={{ textAlign:"center",padding:"40px 20px",color:C.hint,fontSize:13,lineHeight:1.9 }}>見つかりませんでした。<br/>誕生日・自由項目・関係・能力値などを入れていくと、ネタが出てくるようになります。</div>
+        :solos.map(({c,list})=>card("s"+c.id,<FamAvatar ch={c} size={30}/>,line(charName(c),list.slice(0,2).map(x=>x.label).join("・")),list.length,<>
+          {list.map(x=>{ const k=c.id+"|"+x.key; return <NetaItem key={k} x={x} done={saved[k]} onSave={()=>save(k,x.neta,[c.id])}/>; })}
+          {onOpenChar&&<button onClick={()=>onOpenChar(c.id)} style={{ marginTop:8,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:C.accent,padding:"4px 0" }}>人物ページを開く</button>}
+        </>)))
+      :cs.length<2?<div style={{ textAlign:"center",padding:"40px 20px",color:C.hint,fontSize:13 }}>人物を2人以上登録すると使えます</div>
       :pairs.length===0?<div style={{ textAlign:"center",padding:"40px 20px",color:C.hint,fontSize:13,lineHeight:1.9 }}>見つかりませんでした。<br/>自由項目・誕生日・所属などを入れていくと、共通点が見つかるようになります。</div>
-      :pairs.map(p=>{ const k=p.a.id+p.b.id; const isOpen=open===k; return (
-        <div key={k} style={{ background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden" }}>
-          <button onClick={()=>setOpen(isOpen?null:k)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 12px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left" }}>
-            <div style={{ display:"flex" }}><FamAvatar ch={p.a} size={30}/><div style={{ marginLeft:-8,borderRadius:"50%",boxShadow:`0 0 0 2px ${C.surface}` }}><FamAvatar ch={p.b} size={30}/></div></div>
-            <div style={{ flex:1,minWidth:0 }}>
-              <div style={{ fontSize:13,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{charName(p.a)} × {charName(p.b)}</div>
-              <div style={{ fontSize:11,color:C.hint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{p.list.slice(0,2).map(x=>x.label).join("・")}</div>
-            </div>
-            <span style={{ fontSize:11,color:C.accent,background:C.accent+"14",borderRadius:10,padding:"2px 8px",flexShrink:0 }}>{p.list.length}</span>
-            <Ico n={isOpen?"chevU":"chevD"} s={14} c={C.hint}/>
-          </button>
-          {isOpen&&<div style={{ padding:"0 12px 10px" }}><CommonList data={data} a={p.a} b={p.b} onSaveIdea={onSaveIdea} saved={saved} setSaved={setSaved}/></div>}
-        </div>
-      ); })}
+      :pairs.map(p=>card("p"+p.a.id+p.b.id,
+        <div style={{ display:"flex" }}><FamAvatar ch={p.a} size={30}/><div style={{ marginLeft:-8,borderRadius:"50%",boxShadow:`0 0 0 2px ${C.surface}` }}><FamAvatar ch={p.b} size={30}/></div></div>,
+        line(`${charName(p.a)} × ${charName(p.b)}`,p.list.slice(0,2).map(x=>x.label).join("・")),p.list.length,
+        <CommonList data={data} a={p.a} b={p.b} onSaveIdea={onSaveIdea} saved={saved} setSaved={setSaved} only={only}/>))}
+      <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8,marginTop:12 }}>「ネタにする」を押すと、アイデアボックス（作品一覧の電球マーク）に保存されます。</div>
     </div>
   );
 };
