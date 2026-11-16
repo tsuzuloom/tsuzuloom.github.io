@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.17.0";
+const APP_VERSION = "0.17.1";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -27,6 +27,8 @@ const calcAge = (birth,target) => { if(!birth||!target) return null; const b=new
 const IMG_BUCKET = "character-images";
 // 無料プランの上限。アプリ内課金が使えるようになったら enabled を true にする
 const PLAN = { enabled:false, maxStories:10, maxImages:100 };
+// プレミアムを買えるようになるまでは、鍵つきの機能や「準備中」の表示を出さない（審査で未完成と見られないように）
+const SHOW_PREMIUM = false;
 const countImages = (d) => { let n=0; Object.values(d||{}).forEach(v=>{ if(Array.isArray(v)) v.forEach(x=>{ if(x&&typeof x==="object"&&typeof x.image==="string"&&x.image) n++; }); }); return n; };
 // 画像を新しく足してよいかを確かめる（App が中身を差し込む）
 let imageGuard = null;
@@ -2705,7 +2707,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
           {sideLabel("世界観")}
           {["groups","locations","terms"].map(k=>sideItem(k))}
           {sideLabel("見取り図")}
-          {["graph","family","pairs","timeline"].map(k=>sideItem(k))}
+          {["graph","family","pairs","timeline"].filter(k=>!(k==="pairs"&&!SHOW_PREMIUM&&!isPremium)).map(k=>sideItem(k))}
           {sideLabel("その他")}
           {MORE.map(k=>sideItem(k))}
         </div>
@@ -2745,7 +2747,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       {saveStatus==="error"&&<div style={{ padding:"7px 12px",background:C.surface,borderBottom:`0.5px solid ${C.border}`,flexShrink:0,display:"flex",justifyContent:"center" }}><SaveMark/></div>}
       {offlineBar}
       {!defView&&<div style={{ padding:"4px 12px 0",fontSize:10.5,color:C.hint,letterSpacing:"0.06em",flexShrink:0 }}>{tab.label} / {SECTIONS[currentKey].label}</div>}
-      {!defView&&tab.subs&&<div style={{ padding:"8px 12px 0",flexShrink:0 }}><Tabs tabs={tab.subs.map(k=>({key:k,label:SECTIONS[k].label}))} active={currentKey} onChange={k=>goSection(k)}/></div>}
+      {!defView&&tab.subs&&<div style={{ padding:"8px 12px 0",flexShrink:0 }}><Tabs tabs={tab.subs.filter(k=>!(k==="pairs"&&!SHOW_PREMIUM&&!isPremium)).map(k=>({key:k,label:SECTIONS[k].label}))} active={currentKey} onChange={k=>goSection(k)}/></div>}
       <div style={{ flex:1,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,position:"relative" }}>
         {defView
           ? viewEl(defView)
@@ -3925,9 +3927,10 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
     setTimeout(()=>setFilesMsg(`${data.length}件の作品を「ファイル」に保存しました。`),1600);
   };
   const native=isNativeApp();
+  const showPrem=SHOW_PREMIUM||isPremium;   // 買えるようになるまでは、持っている人にだけ見せる
   const PAGES={ account:"アカウント", display:"表示", icon:"アプリのアイコン", data:"データ", support:"ヘルプとサポート", about:"このアプリについて" };
   // アイコンはiPhoneアプリだけ。Web版でURLから来たときはトップに戻す
-  const cur = (page&&PAGES[page]&&(page!=="icon"||native)) ? page : null;
+  const cur = (page&&PAGES[page]&&(page!=="icon"||(native&&showPrem))) ? page : null;
   const go = (k)=>onPage(k);
   const themeLabel = (THEMES[theme]&&!(THEMES[theme].premium&&!isPremium)) ? THEMES[theme].label : THEMES.mono.label;
   const fontLabel  = (FONTS[fontKey]&&!(FONTS[fontKey].premium&&!isPremium)) ? FONTS[fontKey].label : FONTS.sans.label;
@@ -3941,8 +3944,8 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
     </SetGroup>
     <SetGroup>
       <SetRow icon="palette" label="表示" sub={`${themeLabel}・${fontLabel}`} onClick={()=>go("display")}/>
-      {darkRow(!native)}
-      {native&&<SetRow icon="grid" label="アプリのアイコン" sub={iconLabel} onClick={()=>go("icon")} last/>}
+      {darkRow(!(native&&showPrem))}
+      {native&&showPrem&&<SetRow icon="grid" label="アプリのアイコン" sub={iconLabel} onClick={()=>go("icon")} last/>}
     </SetGroup>
     <SetGroup>
       <SetRow icon="save" label="データ" sub="ゴミ箱・ファイルへの保存" onClick={()=>go("data")} last/>
@@ -3953,14 +3956,14 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
     </SetGroup>
     <div style={{ textAlign:"center",marginTop:8,opacity:0.55 }}>
       <div style={{ fontSize:12,fontWeight:600,color:C.sub,letterSpacing:"-0.2px" }}>Tsuzu Loom</div>
-      <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}（ベータ）</div>
+      <div style={{ fontSize:10,color:C.hint,marginTop:2 }}>version {APP_VERSION}</div>
     </div>
   </>);
 
   const account = (<>
     <SetGroup>
-      <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
-      <SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last={!(PLAN.enabled&&!isPremium&&usage)}/>
+      <SetRow icon="person" label={email} sub="ログイン中のアカウント" last={!showPrem}/>
+      {showPrem&&<SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last={!(PLAN.enabled&&!isPremium&&usage)}/>}
       {PLAN.enabled&&!isPremium&&usage&&<>
         <SetRow icon="book" label="作品" right={<span style={{ fontSize:12.5,color:usage.stories>=PLAN.maxStories?C.danger:C.sub }}>{usage.stories} / {PLAN.maxStories}</span>}/>
         <SetRow icon="camera" label="画像" right={<span style={{ fontSize:12.5,color:usage.images>=PLAN.maxImages?C.danger:C.sub }}>{usage.images} / {PLAN.maxImages}</span>} last/>
@@ -3981,7 +3984,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
     <SetGroup title="テーマ">
       <div style={{ padding:"14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-          {Object.entries(THEMES).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
+          {Object.entries(THEMES).filter(([,t])=>showPrem||!t.premium).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
             <button key={key} onClick={()=>locked?setPremOpen(true):onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
               <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
               <span style={{ fontSize:12.5,fontWeight:on?600:400,color:C.text }}>{t.label}</span>
@@ -3994,7 +3997,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
     <SetGroup title="本文の書体">
       <div style={{ padding:"14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-          {Object.entries(FONTS).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
+          {Object.entries(FONTS).filter(([,f])=>showPrem||!f.premium).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
             <button key={key} onClick={()=>{ if(locked){ setPremOpen(true); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
               <span style={{ fontSize:15,color:C.text,fontFamily:f.stack }}>物語を綴る</span>
               <span style={{ fontSize:10.5,color:C.sub }}>{f.label}</span>
@@ -4008,7 +4011,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       {darkRow(false)}
       <SetRow icon="edit" label="見出しを明朝体にする" sub="作品名や人物名など、見出しにあたる文字の書体" onClick={()=>onSerif(!serifHeads)} right={<Toggle on={serifHeads}/>} last/>
     </SetGroup>
-    {!isPremium&&note("鍵のついたテーマと書体は、プレミアムプランで使えるようになります。")}
+    {!isPremium&&SHOW_PREMIUM&&note("鍵のついたテーマと書体は、プレミアムプランで使えるようになります。")}
   </>);
 
   const icon = (<>
@@ -4067,7 +4070,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       <SetRow icon="link" label="ライセンス" onClick={()=>openExternal(DOCS_URL+"licenses.html")} last/>
     </SetGroup>
     <SetGroup>
-      <SetRow icon="sparkle" label="バージョン" right={<span style={{ fontSize:12.5,color:C.sub }}>{APP_VERSION}（ベータ）</span>} last/>
+      <SetRow icon="sparkle" label="バージョン" right={<span style={{ fontSize:12.5,color:C.sub }}>{APP_VERSION}</span>} last/>
     </SetGroup>
   </>);
 
