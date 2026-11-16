@@ -7,7 +7,7 @@ import { AppIcon } from '@capacitor-community/app-icon';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.16.0";
+const APP_VERSION = "0.17.0";
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ===================== UTILS =====================
@@ -25,6 +25,11 @@ const charFuri = (ch) => { if(!ch) return "";
 const charInitial = (ch) => ((ch&&(ch.nameOrder==="last_first"?(ch.lastName||ch.firstName):(ch.firstName||ch.lastName)))||"?").slice(0,1);
 const calcAge = (birth,target) => { if(!birth||!target) return null; const b=new Date(birth),t=new Date(target); let age=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) age--; return age>=0?age:null; };
 const IMG_BUCKET = "character-images";
+// 無料プランの上限。アプリ内課金が使えるようになったら enabled を true にする
+const PLAN = { enabled:false, maxStories:10, maxImages:100 };
+const countImages = (d) => { let n=0; Object.values(d||{}).forEach(v=>{ if(Array.isArray(v)) v.forEach(x=>{ if(x&&typeof x==="object"&&typeof x.image==="string"&&x.image) n++; }); }); return n; };
+// 画像を新しく足してよいかを確かめる（App が中身を差し込む）
+let imageGuard = null;
 // 画像は作品データに埋め込まず、別の倉庫に置いて住所だけ持つ
 const compressBlob = (dataUrl) => new Promise((resolve,reject) => {
   const img=new Image();
@@ -188,7 +193,7 @@ const SvgImage = ({ href, ...rest }) => { const u=useSignedSrc(href); return u ?
 const compressImage = (dataUrl) => new Promise(resolve => { const img=new Image(); img.onload=()=>{ const max=800; let w=img.width,h=img.height; if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); resolve(c.toDataURL("image/jpeg",0.82)); }; img.src=dataUrl; });
 const countChars = (str) => { if(!str) return 0; return str.replace(/\s/g,"").length; };
 const storyChars = (d) => (d.scenes||[]).reduce((sum,s)=>sum+countChars(s.script),0);
-const mkSummary = (d) => ({ synopsis:(d.storySynopsis||"").slice(0,80), chars:(d.characters||[]).length, scenes:(d.scenes||[]).length, words:storyChars(d) });
+const mkSummary = (d) => ({ synopsis:(d.storySynopsis||"").slice(0,80), chars:(d.characters||[]).length, scenes:(d.scenes||[]).length, words:storyChars(d), images:countImages(d) });
 
 const DEFAULT_MONTHS = Array.from({length:12},(_,i)=>({name:`${i+1}月`,days:30}));
 const normCal = (c) => ({ enabled:false, yearLabel:"", eraOnly:false, display:"both", months:DEFAULT_MONTHS, eras:[], ...(c||{}),
@@ -546,7 +551,9 @@ const ImageUpload = ({ value, onChange }) => {
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState("");
   const pick=async(f)=>{
-    setErr(""); setBusy(true);
+    setErr("");
+    if(imageGuard&&!(await imageGuard(!!value))) return;
+    setBusy(true);
     try {
       const dataUrl=await readAsDataUrl(f);
       const blob=await compressBlob(dataUrl);
@@ -1104,7 +1111,7 @@ const CharacterView = ({ char, data, onClose, onEdit, onJump, onEditRel, embedde
               {ageText(data,char)&&<Tag label={ageText(data,char)}/>}
               {groups.slice(0,2).map(x=><Tag key={x.groupId} label={x.position?`${x.g.name}・${x.position}`:x.g.name}/>)}
             </div>
-            {onFindCommon&&data.characters.length>1&&<button onClick={onFindCommon} style={{ display:"inline-flex",alignItems:"center",gap:5,marginTop:9,padding:"5px 11px",borderRadius:16,border:`0.5px solid ${acc}`,background:acc+"12",color:acc,fontSize:11.5,cursor:"pointer",fontFamily:"inherit" }}><Ico n="bulb" s={12} c={acc}/>共通点をさがす</button>}
+            {onFindCommon&&data.characters.length>1&&<button onClick={onFindCommon} style={{ display:"inline-flex",alignItems:"center",gap:5,marginTop:9,padding:"5px 11px",borderRadius:16,border:`0.5px solid ${acc}`,background:acc+"12",color:acc,fontSize:11.5,cursor:"pointer",fontFamily:"inherit" }}><Ico n="bulb" s={12} c={acc}/>ネタをさがす</button>}
           </div>
         </div>
 
@@ -2567,7 +2574,7 @@ function StoryEditor({ data, setData, onBack, saveStatus, saveError, online, onR
       case "count": return <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",paddingTop:12 }}><WordCountView data={data}/></div>;
       case "characters": return charListEl;
       case "graph": return <RelationGraph data={data} onOpenChar={ch=>openChar(ch.id)} onEditRel={(a,b)=>setModal({type:"relation",item:{charId:a,otherId:b}})} onMoveNodes={moveNodes} onResetNodes={resetNodes}/>;
-      case "pairs": return <PairFinder data={data} onSaveIdea={onSaveIdea} onOpenChar={id=>openChar(id)}/>;
+      case "pairs": return <PairFinder isPremium={isPremium} data={data} onSaveIdea={onSaveIdea} onOpenChar={id=>openChar(id)}/>;
       case "family": return <FamilyTreeView data={data} isPremium={true} onOpenChar={id=>openChar(id)} setFamily={setFamily}/>;
       case "timeline": return <TimelineView data={data} onEditScene={sc=>setModal({type:"scene",item:sc})} onEditEvent={ev=>setModal({type:"event",item:ev})} onAddEvent={()=>setModal({type:"event"})} onOpenChar={id=>openChar(id)}/>;
       case "scenes": return simpleList("scenes",{modal:"scene",renderName:s=>s.title||"（無題）",renderSubtitle:s=>{const ch=data.chapters.find(c=>c.id===s.relatedChapterId);return[dateLabel(data,s.startDate),ch?ch.title:null,s.script?`${countChars(s.script)}字`:null].filter(Boolean).join(" · ")||null;}});
@@ -2826,6 +2833,9 @@ const IntroArt = ({ kind }) => {
       </div>
     ))}
   </div>);
+  if(kind==="plan") return (<div style={{ ...box,height:96,display:"flex",alignItems:"center",justifyContent:"center" }}>
+    <div style={{ width:76,height:76,borderRadius:24,background:C.accent+"18",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="sparkle" s={38} c={C.accent} sw={1.3}/></div>
+  </div>);
   if(kind==="safe") return (<div style={{ ...box,display:"flex",alignItems:"center",justifyContent:"center" }}>
     <div style={{ width:92,height:92,borderRadius:28,background:C.accent+"18",display:"flex",alignItems:"center",justifyContent:"center" }}><Ico n="shield" s={46} c={C.accent} sw={1.3}/></div>
   </div>);
@@ -2837,9 +2847,15 @@ const INTRO_PAGES = [
   { art:"time", title:"年表と、独自の暦", body:"シーンや出来事を時間の順に並べて、その時の年齢まで自動で表示します。\n作品だけの暦や元号を作ることもできます。" },
   { art:"safe", title:"安心して書けるように", list:["書いた内容は自動で保存。電波がなくても書けます","消した作品は、ゴミ箱から30日間もとに戻せます","運営者が作品を見たり、AIの学習に使ったりすることはありません"] },
 ];
+// 課金が始まったら、案内の最後に料金の考え方を添える
+const INTRO_PLAN_PAGE = { art:"plan", title:"無料プランでできること", sections:[
+  ["", `作品は${PLAN.maxStories}作、画像は${PLAN.maxImages}枚まで、無料で保存できます。\nそれより多く保存したいときは、プレミアムプランをご検討ください。`],
+  ["プレミアムプランについて", "Tsuzu Loom は、「創作の設定をもっと楽に整理したい」「整理しながら、ネタも広げていきたい」という思いから、個人で作りはじめたアプリです。\n同じように創作をしている方の「不便だな」も解消できたらと思い、アプリとしてお届けすることにしました。\nいただいた料金は、作品を安全に保管するためのサーバーの運営や保守にあて、アプリを長く続けていくための支えにさせていただきます。\nこれからも皆さまの創作を支えられるよう努めてまいりますので、ご理解いただけるとうれしいです。"],
+] };
 function WelcomeIntro({ onClose, onOpenSample, hasSample }) {
   const [i,setI]=useState(0);
-  const pg=INTRO_PAGES[i]; const last=i===INTRO_PAGES.length-1;
+  const PAGES=PLAN.enabled?[...INTRO_PAGES,INTRO_PLAN_PAGE]:INTRO_PAGES;
+  const pg=PAGES[i]; const last=i===PAGES.length-1;
   const done=(fn)=>{ try { localStorage.setItem(INTRO_KEY,"1"); } catch(e){} fn&&fn(); onClose(); };
   return (
     <div style={{ position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.42)",display:"flex",alignItems:"center",justifyContent:"center",padding:"calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))" }}>
@@ -2852,12 +2868,15 @@ function WelcomeIntro({ onClose, onOpenSample, hasSample }) {
           <IntroArt kind={pg.art}/>
           <div style={{ fontFamily:C.display,fontSize:19,color:C.text,margin:"18px 0 10px" }}>{pg.title}</div>
           {pg.body&&<div style={{ fontSize:13,color:C.sub,lineHeight:1.95,whiteSpace:"pre-line" }}>{pg.body}</div>}
+          {pg.sections&&<div style={{ textAlign:"left",marginTop:2 }}>{pg.sections.map(([h,t],k)=>(
+            <div key={k} style={{ marginBottom:12 }}>{h&&<div style={{ fontSize:12.5,fontWeight:600,color:C.text,marginBottom:4 }}>{h}</div>}<div style={{ fontSize:12.5,color:C.sub,lineHeight:1.9,whiteSpace:"pre-line" }}>{t}</div></div>
+          ))}</div>}
           {pg.list&&<div style={{ display:"flex",flexDirection:"column",gap:9,textAlign:"left",marginTop:2 }}>{pg.list.map(t=>(
             <div key={t} style={{ display:"flex",gap:9,alignItems:"flex-start" }}><div style={{ marginTop:3,flexShrink:0 }}><Ico n="check" s={14} c={C.accent}/></div><span style={{ fontSize:12.5,color:C.sub,lineHeight:1.75 }}>{t}</span></div>
           ))}</div>}
         </div>
         <div style={{ display:"flex",justifyContent:"center",gap:6,padding:"18px 0 14px" }}>
-          {INTRO_PAGES.map((_,k)=><button key={k} onClick={()=>setI(k)} aria-label={`${k+1}ページ目`} style={{ width:k===i?18:7,height:7,borderRadius:4,border:"none",padding:0,background:k===i?C.accent:C.border,cursor:"pointer",transition:"width 0.2s" }}/>)}
+          {PAGES.map((_,k)=><button key={k} onClick={()=>setI(k)} aria-label={`${k+1}ページ目`} style={{ width:k===i?18:7,height:7,borderRadius:4,border:"none",padding:0,background:k===i?C.accent:C.border,cursor:"pointer",transition:"width 0.2s" }}/>)}
         </div>
         <div style={{ padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:8 }}>
           {!last&&<div style={{ display:"flex",gap:8 }}>
@@ -3552,7 +3571,7 @@ const findCommon = (data, a, b) => {
     const di=dayIndex(data,a.birthday), dj=dayIndex(data,b.birthday);
     if(di!=null&&dj!=null){ const older=di<=dj?a:b, younger=di<=dj?b:a; const gap=ageBetween(data,older.birthday,younger.birthday);
       if(gap===0&&!sameDay) add("age","同い年",`${A}と${B}は同い年。同じ年に、それぞれ何をしていた？`);
-      else if(gap!=null&&gap%10===0&&gap<=50) add("age",`ちょうど${gap}歳差`,`${charName(older)}が${gap}歳のとき、${charName(younger)}が生まれた。そのとき${charName(older)}は何をしていた？`); }
+      else if(gap!=null&&gap>0&&gap%10===0&&gap<=50) add("age",`ちょうど${gap}歳差`,`${charName(older)}が${gap}歳のとき、${charName(younger)}が生まれた。そのとき${charName(older)}は何をしていた？`); }
   }
   // 所属
   a.relatedGroups.forEach(r=>{ if(!b.relatedGroups.some(x=>x.groupId===r.groupId)) return; const g=data.groups.find(x=>x.id===r.groupId); if(g) add("group",`どちらも「${g.name||"（無名）"}」の一員`,`${A}と${B}は、どちらも「${g.name||"（無名）"}」の一員。その中でのふたりの距離感は？`); });
@@ -3597,27 +3616,132 @@ const CommonList = ({ data, a, b, onSaveIdea, saved, setSaved }) => {
   </div>);
 };
 
+// ひとりの設定から出すネタ（AIは使わず、入っている設定から）
+const HOLIDAYS = {
+  "1-1":["元日","誕生日が元日。お正月とお祝いがいっしょくたにされがちな話は？"],
+  "2-3":["節分","誕生日が節分。豆まきの日に生まれた話は？"],
+  "2-14":["バレンタインデー","誕生日がバレンタインデー。チョコと誕生日プレゼント、どっちをもらう？"],
+  "2-29":["2月29日","誕生日が2月29日。4年に1度しか来ない誕生日の話は？"],
+  "3-3":["ひなまつり","誕生日がひなまつり。小さいころのお祝いの思い出は？"],
+  "3-14":["ホワイトデー","誕生日がホワイトデー。お返しと誕生日祝いが重なる話は？"],
+  "4-1":["エイプリルフール","誕生日がエイプリルフール。本当の誕生日だと信じてもらえない話は？"],
+  "5-5":["こどもの日","誕生日がこどもの日。大人になってもこども扱いされる話は？"],
+  "7-7":["七夕","誕生日が七夕。短冊に書く願いごとは？"],
+  "8-15":["お盆","誕生日がお盆。帰省先で祝われる話は？"],
+  "10-31":["ハロウィン","誕生日がハロウィン。仮装と誕生日会が重なる話は？"],
+  "12-24":["クリスマスイブ","誕生日がクリスマスイブ。誕生日とクリスマスのどちらを優先する？"],
+  "12-25":["クリスマス","誕生日がクリスマス。プレゼントがまとめられがちな子どものころの話は？"],
+  "12-31":["大晦日","誕生日が大晦日。年越しと誕生日をいっしょに祝う話は？"],
+};
+const AGE_MARKS = { 7:"七五三の年", 10:"10歳", 13:"13歳", 15:"15歳", 17:"17歳", 18:"成人", 20:"20歳", 30:"30歳", 40:"40歳", 50:"50歳", 60:"還暦", 77:"喜寿", 88:"米寿", 100:"100歳" };
+const findSolo = (data, c) => {
+  const out=[]; if(!c) return out;
+  const N=charName(c); const nm=(o)=>charName(o);
+  const add=(kind,label,neta)=>out.push({ key:kind+"|"+label, kind, label, neta });
+  const cal=data.calendar; const custom=!!(cal&&cal.enabled);
+  const b=parseYMD(c.birthday); const now=parseYMD(data.nowDate);
+  const dI=(s)=>s?dayIndex(data,s):null;
+  const alive=(at)=>!c.deathDate||dI(c.deathDate)==null||dI(at)==null||dI(at)<=dI(c.deathDate);
+  // 誕生日と行事（現実の暦のとき）
+  if(b&&!custom){ const h=HOLIDAYS[`${b.m}-${b.d}`]; if(h) add("holiday",`誕生日が${h[0]}`,h[1]); }
+  // 誕生日が近い・年齢の節目（作中の現在から）
+  if(b&&now&&alive(data.nowDate)){
+    let next=`${now.y}-${b.m}-${b.d}`; if(dI(next)!=null&&dI(next)<dI(data.nowDate)) next=`${now.y+1}-${b.m}-${b.d}`;
+    const left=dI(next)!=null?dI(next)-dI(data.nowDate):null;
+    if(left===0) add("bday","作中の「現在」が誕生日",`${N}は今日が誕生日。誰がいちばんに気づく？`);
+    else if(left!=null&&left<=14) add("bday",`あと${left}日で誕生日`,`${N}は、あと${left}日で誕生日。お祝いしてくれそうなひとは？`);
+    const age=ageBetween(data,c.birthday,data.nowDate);
+    if(age!=null&&AGE_MARKS[age]) add("age",`作中の「現在」で${age}歳（${AGE_MARKS[age]}）`,`${N}は${age}歳。${age===18||age===20?"大人になったと感じる瞬間は？":`${AGE_MARKS[age]}を迎える${N}の、節目の一日は？`}`);
+  }
+  // 自由項目
+  data.parameters.forEach(p=>{
+    const e=c.parameters.find(x=>x.paramId===p.id);
+    if(p.type==="long"){ if(!(e&&(e.value||"").trim())) add("blank",`「${p.name}」がまだ空いている`,/生い立ち|過去|経歴/.test(p.name)?`${N}の子どものころの話は？`:/家庭|家族/.test(p.name)?`${N}の家族が出てくる話は？`:/性格/.test(p.name)?`${N}の性格がいちばん出る場面は？`:`${N}の「${p.name}」がわかるエピソードは？`); return; }
+    const vals=paramIsSelect(p)?paramValueIds(e).map(id=>(paramOpts(p).find(o=>o.id===id)||{}).label).filter(Boolean):(((e&&e.value)||"").trim()?[(e.value||"").trim()]:[]);
+    vals.filter(v=>v.length<=20).slice(0,3).forEach(v=>{
+      if(/好き|好物|趣味/.test(p.name)) add("param",`${p.name}が「${v}」`,`「${v}」が好きな${N}。それを我慢しなきゃいけない話や、誰かと分け合う話は？`);
+      else if(/苦手|嫌い|弱点|怖/.test(p.name)) add("param",`${p.name}が「${v}」`,`「${v}」が苦手な${N}。それと向き合わなきゃいけない話は？`);
+      else if(!/身長|体重|年齢|血液/.test(p.name)) add("param",`${p.name}が「${v}」`,`${N}の${p.name}「${v}」にまつわるエピソードは？`);
+    });
+  });
+  // 能力値
+  const st=(c.abilityStages||[]).filter(s=>s&&s.abilities&&s.abilities.length);
+  const val=(s,id)=>{ const a=s.abilities.find(x=>x.paramId===id); return a?a.value:null; };
+  if(st.length&&data.abilityParams.length){
+    const last=st[st.length-1]; const vs=data.abilityParams.map(ap=>({ ap, v:val(last,ap.id) })).filter(x=>x.v!=null);
+    if(vs.length){ const lo=vs.reduce((m,x)=>x.v<m.v?x:m), hi=vs.reduce((m,x)=>x.v>m.v?x:m);
+      if(lo.v<=40) add("ability",`いちばん苦手なのは「${lo.ap.name}」（${lo.v}）`,`${N}が苦手な「${lo.ap.name}」を克服しようとする話は？`);
+      if(hi.v>=70) add("ability",`いちばん得意なのは「${hi.ap.name}」（${hi.v}）`,`得意な「${hi.ap.name}」で、${N}があえて失敗する話は？`); }
+    if(st.length>=2){ let best=null;
+      for(let i=1;i<st.length;i++) data.abilityParams.forEach(ap=>{ const x=val(st[i-1],ap.id), y=val(st[i],ap.id); if(x==null||y==null) return; const d=y-x; if(!best||Math.abs(d)>Math.abs(best.d)) best={ d, ap, from:st[i-1].name, to:st[i].name }; });
+      if(best&&Math.abs(best.d)>=10) add("ability",`「${best.from}」→「${best.to}」で「${best.ap.name}」が${Math.abs(best.d)}${best.d>0?"上がった":"下がった"}`,`${N}の「${best.ap.name}」が${best.d>0?"伸びた":"落ちた"}のは、何がきっかけ？`); }
+  }
+  // 関係
+  data.characters.forEach(o=>{ if(o.id===c.id) return;
+    const mine=c.relatedCharacters.find(r=>r.charId===o.id), theirs=o.relatedCharacters.find(r=>r.charId===c.id);
+    const on=(r)=>!!(r&&(r.relTypeId||r.text||r.arrowOut));
+    const tName=(r)=>{ const t=r&&data.relationTypes.find(x=>x.id===r.relTypeId); return t?t.name:""; };
+    if(on(mine)&&!on(theirs)) add("rel",`${nm(o)}への${tName(mine)||"想い"}は一方通行`,`${N}から${nm(o)}への想いは一方通行。想いを伝える（伝えない）話は？`);
+    else if(on(theirs)&&!on(mine)) add("rel",`${nm(o)}から一方的に想われている`,`${nm(o)}の想いに、${N}が気づく瞬間は？`);
+    if((on(mine)||on(theirs))&&o.deathDate&&(!now||dI(o.deathDate)==null||dI(o.deathDate)<=dI(data.nowDate))) add("rel",`亡くなった${nm(o)}とつながりがある`,`${N}と、亡くなった${nm(o)}との思い出の話は？`);
+  });
+  const fm=famMaps(famLinks(data));
+  famSiblingsOf(fm,c.id).slice(0,2).forEach(id=>{ const o=data.characters.find(x=>x.id===id); if(o) add("family",`きょうだいに${nm(o)}がいる`,`${N}と${nm(o)}の、子どものころの話は？`); });
+  (fm.parents[c.id]||[]).forEach(id=>{ const o=data.characters.find(x=>x.id===id); if(o&&o.deathDate) add("family",`親の${nm(o)}は亡くなっている`,`${N}が${nm(o)}を思い出す場面は？`); });
+  // 所属・用語・場所
+  c.relatedGroups.slice(0,3).forEach(r=>{ const g=data.groups.find(x=>x.id===r.groupId); if(!g) return; if(r.position) add("group",`「${g.name||"（無名）"}」の${r.position}`,`${N}が「${g.name||"（無名）"}」の${r.position}になるまでの話は？`); else add("group",`「${g.name||"（無名）"}」に所属`,`${N}が「${g.name||"（無名）"}」に入ったきっかけは？`); });
+  (c.relatedTerms||[]).slice(0,3).forEach(id=>{ const t=data.terms.find(x=>x.id===id); if(t) add("term",`「${t.name||"（無名）"}」に関わる`,`${N}と「${t.name||"（無名）"}」の関わりが始まったきっかけは？`); });
+  const my=data.scenes.filter(s=>s.relatedCharacters.includes(c.id));
+  const locCount={}; my.forEach(s=>{ if(s.relatedLocationId) locCount[s.relatedLocationId]=(locCount[s.relatedLocationId]||0)+1; });
+  const topLoc=Object.entries(locCount).sort((x,y)=>y[1]-x[1])[0];
+  if(topLoc&&topLoc[1]>=2){ const l=data.locations.find(x=>x.id===topLoc[0]); if(l) add("place",`よく「${l.name||"（無名）"}」に出てくる`,`「${l.name||"（無名）"}」での、${N}の何気ない日常の話は？`); }
+  // 登場
+  if(data.scenes.length&&!my.length) add("scene","まだ一度もシーンに出ていない",`${N}の初登場の場面は？`);
+  else if(now&&my.length){ const dated=my.filter(s=>s.startDate&&dI(s.startDate)!=null).sort((x,y)=>dI(y.startDate)-dI(x.startDate));
+    if(dated.length){ const gap=dI(data.nowDate)-dI(dated[0].startDate); if(gap>=365) add("scene",`最後の登場から${Math.floor(gap/365)}年以上`,`最後の登場（${dated[0].title||"無題のシーン"}）から、${N}は何をしていた？`); } }
+  if(c.deathDate) add("death","亡くなっている",`${N}が亡くなる前の日の話は？`);
+  return out;
+};
+
 // 人物ページから：この人と誰かを比べる
 const CommonFinder = ({ data, char, onClose, onSaveIdea, initialOther }) => {
   const others=data.characters.filter(c=>c.id!==char.id);
   const ranked=others.map(o=>({ o, n:findCommon(data,char,o).length })).sort((x,y)=>y.n-x.n);
   const [otherId,setOtherId]=useState(initialOther||(ranked[0]&&ranked[0].o.id)||"");
   const [saved,setSaved]=useState({});
+  const [tab,setTab]=useState(initialOther?"pair":"solo");
   const other=data.characters.find(c=>c.id===otherId);
+  const solo=findSolo(data,char);
   return (
-    <Modal title="共通点をさがす" onClose={onClose} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={onClose}>閉じる</Btn></>}>
+    <Modal title="ネタをさがす" onClose={onClose} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={onClose}>閉じる</Btn></>}>
       <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
-        <FamAvatar ch={char} size={34}/><span style={{ fontSize:13,color:C.text }}>{charName(char)}</span><span style={{ color:C.hint }}>と</span>
+        <FamAvatar ch={char} size={34}/><span style={{ fontSize:14,color:C.text,fontFamily:C.display }}>{charName(char)}</span>
       </div>
+      <div style={{ display:"flex",background:C.tag,borderRadius:10,padding:3,marginBottom:14 }}>
+        {[["solo","この人のネタ"],["pair","誰かとの共通点"]].map(([k,l])=><button key={k} onClick={()=>{ setTab(k); setSaved({}); }} style={{ flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:tab===k?C.surface:"transparent",color:tab===k?C.text:C.sub,fontSize:12.5,fontWeight:tab===k?600:400,cursor:"pointer",fontFamily:"inherit",boxShadow:tab===k?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{l}</button>)}
+      </div>
+      {tab==="solo"&&(solo.length===0
+        ? <div style={{ fontSize:12.5,color:C.hint,lineHeight:1.9,padding:"10px 2px" }}>ネタが見つかりませんでした。<br/>誕生日・自由項目・関係・能力値などを入れていくと、ネタが出てくるようになります。</div>
+        : solo.map(x=>{ const done=saved[x.key]; return (
+          <div key={x.key} style={{ padding:"10px 0",borderBottom:`0.5px solid ${C.borderL}` }}>
+            <div style={{ fontSize:13,color:C.text,fontWeight:600,marginBottom:3 }}>{x.label}</div>
+            <div style={{ display:"flex",gap:8,alignItems:"flex-start" }}>
+              <div style={{ flex:1,fontSize:12,color:C.sub,lineHeight:1.75 }}>{x.neta}</div>
+              <button onClick={()=>{ if(done) return; onSaveIdea(x.neta,[char.id]); setSaved(s=>({...s,[x.key]:true})); }} style={{ flexShrink:0,display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:16,border:`0.5px solid ${done?C.border:C.accent}`,background:done?"transparent":C.accent+"12",color:done?C.hint:C.accent,fontSize:11.5,cursor:done?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}><Ico n={done?"check":"bulb"} s={12} c={done?C.hint:C.accent}/>{done?"保存しました":"ネタにする"}</button>
+            </div>
+          </div>
+        ); }))}
+      {tab==="pair"&&<>
       <Sel label="比べる相手（共通点の多い順）" value={otherId} onChange={v=>{ setOtherId(v); setSaved({}); }} options={ranked.map(({o,n})=>({ value:o.id, label:`${charName(o)}（${n}）` }))}/>
       {other&&<CommonList data={data} a={char} b={other} onSaveIdea={onSaveIdea} saved={saved} setSaved={setSaved}/>}
+      </>}
       <div style={{ fontSize:10.5,color:C.hint,lineHeight:1.8,marginTop:12 }}>「ネタにする」を押すと、アイデアボックス（作品一覧の電球マーク）に保存されます。</div>
     </Modal>
   );
 };
 
 // 関係タブ：まだ絡んでいない2人
-const PairFinder = ({ data, onSaveIdea, onOpenChar }) => {
+const PairFinder = ({ data, onSaveIdea, onOpenChar, isPremium }) => {
   const [includeRel,setIncludeRel]=useState(false);
   const [open,setOpen]=useState(null);
   const [saved,setSaved]=useState({});
@@ -3628,6 +3752,15 @@ const PairFinder = ({ data, onSaveIdea, onOpenChar }) => {
       const list=findCommon(data,a,b).filter(x=>x.kind!=="scene"); if(!list.length) continue;
       out.push({ a,b,list,rel,sh }); }
     return out.sort((x,y)=>y.list.length-x.list.length).slice(0,60); },[data,includeRel]);
+  if(!isPremium) return (
+    <div style={{ flex:1,overflowY:"auto",padding:"40px 22px",textAlign:"center" }}>
+      <div style={{ width:74,height:74,borderRadius:24,background:C.tag,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px" }}><Ico n="bulb" s={32} c={C.hint} sw={1.3}/></div>
+      <div style={{ fontFamily:C.display,fontSize:17,color:C.text,marginBottom:8 }}>ネタさがし</div>
+      <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginBottom:14 }}>作品の全員を比べて、関係も一緒のシーンもないのに<br/>共通点がある「まだ絡んでいない2人」を見つけます。</div>
+      <div style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,background:C.tag,fontSize:11.5,color:C.tagTxt,marginBottom:14 }}><Ico n="lock" s={12} c={C.tagTxt}/>プレミアム機能（準備中）</div>
+      <div style={{ fontSize:11.5,color:C.hint,lineHeight:1.9 }}>ひとりずつのネタや、2人の共通点は、<br/>人物ページの「ネタをさがす」から無料で使えます。</div>
+    </div>
+  );
   return (
     <div style={{ flex:1,overflowY:"auto",padding:12 }}>
       <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
@@ -3765,7 +3898,7 @@ const Toggle = ({ on }) => (
   </div>
 );
 
-function SettingsScreen({ onShowIntro, page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
+function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
   const [premOpen,setPremOpen]=useState(false);
@@ -3827,7 +3960,11 @@ function SettingsScreen({ onShowIntro, page, onPage, onBack, theme, dark, serifH
   const account = (<>
     <SetGroup>
       <SetRow icon="person" label={email} sub="ログイン中のアカウント"/>
-      <SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last/>
+      <SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last={!(PLAN.enabled&&!isPremium&&usage)}/>
+      {PLAN.enabled&&!isPremium&&usage&&<>
+        <SetRow icon="book" label="作品" right={<span style={{ fontSize:12.5,color:usage.stories>=PLAN.maxStories?C.danger:C.sub }}>{usage.stories} / {PLAN.maxStories}</span>}/>
+        <SetRow icon="camera" label="画像" right={<span style={{ fontSize:12.5,color:usage.images>=PLAN.maxImages?C.danger:C.sub }}>{usage.images} / {PLAN.maxImages}</span>} last/>
+      </>}
     </SetGroup>
     <SetGroup>
       <SetRow icon="mail" label="メールアドレスを変更" onClick={()=>setMailOpen(true)}/>
@@ -4014,6 +4151,7 @@ function App() {
   const [fontKey,setFontKey]=useState(localStorage.getItem("tl_font")||"sans");
   const [isPremium,setIsPremium]=useState(localStorage.getItem("tl_prem")==="1");
   const metaSettingsRef=useRef({});
+  const [limitBox,setLimitBox]=useState(null);   // "stories" | "images"
   const [introOpen,setIntroOpen]=useState(()=>{ try { return localStorage.getItem(INTRO_KEY)!=="1"; } catch(e){ return false; } });
   const [, forceRender]=useState(0);
 
@@ -4297,7 +4435,13 @@ function App() {
   };
 
   // 新しい作品を作る（from があればその内容で。ファイルからの読み込みにも使う）
+  // 無料プランの上限（PLAN.enabled のときだけ）
+  const limited=()=>PLAN.enabled&&!isPremium&&!demo;
+  const storyCount=()=>(stories||[]).length;
+  const imageTotal=()=>(stories||[]).reduce((n,x)=>n+(x.id===openId&&openData?countImages(openData):((x.summary&&x.summary.images)||0)),0);
+  imageGuard = async(replacing)=>{ if(!limited()||replacing) return true; if(imageTotal()>=PLAN.maxImages){ setLimitBox("images"); return false; } return true; };
   const createStory=async(from)=>{
+    if(limited()&&storyCount()>=PLAN.maxStories){ setLimitBox("stories"); return; }
     if(navigator.onLine===false){ setSyncNotice("オフラインのあいだは新しい作品を作れません。電波の届く場所でもう一度お試しください。"); return; }
     let d;
     if(from&&typeof from==="object"){ d=norm(from); d.storyTitle=from.storyTitle||"読み込んだ作品"; }
@@ -4309,6 +4453,7 @@ function App() {
     setStories([...stories,{id:ins.id,title:ins.title,sort_order:ins.sort_order,updated_at:ins.updated_at,summary:ins.summary}]); setScreen("editor"); setOpenId(ins.id); setOpenData(d); setSection(null); setCharRoute(null);
   };
   const duplicateStory=async(id)=>{
+    if(limited()&&storyCount()>=PLAN.maxStories){ setLimitBox("stories"); return; }
     const { data:src } = await db.from("stories").select("data,title").eq("id",id).single();
     if(!src) return;
     const d={...norm(src.data),storyTitle:`${src.title}のコピー`};
@@ -4383,6 +4528,10 @@ function App() {
   return (
     <div style={{ height:"100%",maxWidth:isDesktop?"none":480,margin:"0 auto",background:C.bg,position:"relative",overflow:"hidden" }}>
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
+      {limitBox&&<Modal compact title="無料プランでは、ここまで使えます" onClose={()=>setLimitBox(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setLimitBox(null)}>OK</Btn></>}>
+        <div style={{ fontSize:13,color:C.text,lineHeight:1.95 }}>作品は{PLAN.maxStories}作、画像は{PLAN.maxImages}枚まで、無料で保存できます。<br/>今ある作品や画像は、これまでどおり見たり書き足したりできるので、安心してくださいね。</div>
+        <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginTop:10 }}>これより多く{limitBox==="images"?"画像を":"作品を"}保存したいときは、プレミアムプランをご検討ください。いただいた料金は、作品を安全に保管するサーバーの運営に使い、アプリを長く続けていくための支えにさせていただきます。</div>
+      </Modal>}
       {screen==="list"&&introOpen&&stories&&<WelcomeIntro onClose={()=>setIntroOpen(false)} hasSample={stories.some(x=>/^見本/.test(x.title||""))} onOpenSample={()=>{ const sm=stories.find(x=>/^見本/.test(x.title||"")); if(sm) openStory(sm.id); }}/>}
       {screen==="list"&&!(loadError&&stories.length===0)&&<StoryList stories={stories} onOpen={openStory} onCreate={()=>createStory()} onImport={obj=>createStory(obj)} onDuplicate={duplicateStory} onDelete={deleteStory} onRename={renameStory} onMove={moveStory} onOpenSettings={()=>{ setSection(null); setScreen("settings"); }} onOpenIdeas={()=>setScreen("ideas")}/>}
       {screen==="editor"&&(openData
@@ -4390,7 +4539,7 @@ function App() {
         : loadError
           ? <ErrorPane text={loadError} onBack={backToList} onRetry={()=>openStory(openId)}/>
           : <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:13,color:C.hint }}>作品を読み込み中...</div></div>)}
-      {screen==="settings"&&<SettingsScreen onShowIntro={()=>{ setIntroOpen(true); setSection(null); setScreen("list"); }} page={section} onPage={setSection} onBack={()=>{ setSection(null); setScreen("list"); }} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>{ setSection("data"); setScreen("trash"); }}/>}
+      {screen==="settings"&&<SettingsScreen usage={{ stories:(stories||[]).length, images:(stories||[]).reduce((n,x)=>n+((x.summary&&x.summary.images)||0),0) }} onShowIntro={()=>{ setIntroOpen(true); setSection(null); setScreen("list"); }} page={section} onPage={setSection} onBack={()=>{ setSection(null); setScreen("list"); }} theme={theme} dark={dark} serifHeads={serifHeads} fontKey={fontKey} isPremium={isPremium} onTheme={changeTheme} onDark={changeDark} onSerif={changeSerif} onFont={changeFont} email={session.user.email} userId={session.user.id} onLogout={()=>db.auth.signOut()} onOpenTrash={()=>{ setSection("data"); setScreen("trash"); }}/>}
       {screen==="trash"&&<TrashScreen onBack={()=>{ setSection("data"); setScreen("settings"); }} userId={session.user.id} onRestored={r=>setStories(prev=>[...(prev||[]),{ id:r.id,title:r.title,sort_order:r.sort_order,updated_at:r.updated_at,summary:r.summary||null }].sort((a,b)=>a.sort_order-b.sort_order))}/>}
       {screen==="ideas"&&<IdeasScreen onBack={()=>setScreen("list")} ideas={ideas} onAdd={addIdea} onDelete={deleteIdea}/>}
       {syncNotice&&(
