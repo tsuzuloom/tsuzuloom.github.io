@@ -4,10 +4,11 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { AppIcon } from '@capacitor-community/app-icon';
+import { canPurchase, startPurchases, stopPurchases, storePremium, loadPlans, buyPlan, restorePlans } from './purchases';
 
 const SUPABASE_URL = "https://gtivdpvuisquzkdsolla.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yys0XxZWiAMOIh1Pgx6lsg_cK1u5qso";
-const APP_VERSION = "0.18.0";
+const APP_VERSION = "0.19.0";
 // アップデート後に最初に開いたとき出すお知らせ。文言はオーナーに確認してから入れる。
 // { version:"x.y.z", title:"…", items:["…"] } 空なら何も出さない
 const WHATS_NEW = null;
@@ -30,12 +31,14 @@ const charInitial = (ch) => ((ch&&(ch.nameOrder==="last_first"?(ch.lastName||ch.
 const calcAge = (birth,target) => { if(!birth||!target) return null; const b=new Date(birth),t=new Date(target); let age=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) age--; return age>=0?age:null; };
 const IMG_BUCKET = "character-images";
 // 無料プランの上限。アプリ内課金が使えるようになったら enabled を true にする
-const PLAN = { enabled:false, maxStories:10, maxImages:100 };
+const PLAN = { enabled:true, maxStories:10, maxImages:100 };
 // プレミアムを買えるようになるまでは、鍵つきの機能や「準備中」の表示を出さない（審査で未完成と見られないように）
-const SHOW_PREMIUM = false;
+const SHOW_PREMIUM = true;
 const countImages = (d) => { let n=0; Object.values(d||{}).forEach(v=>{ if(Array.isArray(v)) v.forEach(x=>{ if(x&&typeof x==="object"&&typeof x.image==="string"&&x.image) n++; }); }); return n; };
 // 画像を新しく足してよいかを確かめる（App が中身を差し込む）
 let imageGuard = null;
+// プレミアムプランの画面を開く（App が中身を入れる）
+let openPremium = () => {};
 // 画像は作品データに埋め込まず、別の倉庫に置いて住所だけ持つ
 const compressBlob = (dataUrl) => new Promise((resolve,reject) => {
   const img=new Image();
@@ -3855,6 +3858,83 @@ const NetaFinder = ({ data, onSaveIdea, onOpenChar }) => {
   );
 };
 
+// ===================== PREMIUM（プレミアムプラン）=====================
+const MANAGE_SUBS_URL = "https://apps.apple.com/account/subscriptions";
+function PremiumScreen({ isPremium, userId, onClose, onSync }) {
+  const buyable=canPurchase();
+  const [plans,setPlans]=useState(null);      // null=読み込み中 / [] = 読めなかった
+  const [pick,setPick]=useState(0);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [done,setDone]=useState(false);
+  useEffect(()=>{ if(!buyable||isPremium) return; let alive=true;
+    startPurchases(userId).then(()=>loadPlans()).then(p=>{ if(alive) setPlans(p); }).catch(()=>{ if(alive) setPlans([]); });
+    return ()=>{ alive=false; }; },[buyable,isPremium,userId]);
+  // 購入・復元のあと、サーバーへの反映を確かめる（少し遅れることがあるので1回だけ待って再確認）
+  const confirm=async()=>{ let prem=await onSync(); if(prem!==true){ await new Promise(r=>setTimeout(r,3000)); prem=await onSync(); } return prem===true; };
+  const buy=async()=>{ const pkg=plans&&plans[pick]; if(!pkg||busy) return; setBusy(true); setMsg("");
+    const r=await buyPlan(pkg);
+    if(r.ok){ const ok=await confirm(); setDone(true); setMsg(ok?"":"反映に少し時間がかかっています。しばらくしてから、アプリを開き直してください。"); }
+    else if(r.error) setMsg(r.error);
+    setBusy(false); };
+  const restore=async()=>{ if(busy) return; setBusy(true); setMsg("");
+    const r=await restorePlans();
+    if(r.error) setMsg(r.error);
+    else if(!r.premium) setMsg("復元できる購入が見つかりませんでした。");
+    else { const ok=await confirm(); setDone(true); setMsg(ok?"":"反映に少し時間がかかっています。しばらくしてから、アプリを開き直してください。"); }
+    setBusy(false); };
+  const perMonth=(pkg)=>{ const pr=pkg.product; if(pkg.packageType!=="ANNUAL"||!pr||!pr.price) return ""; try { return "月あたり "+new Intl.NumberFormat("ja-JP",{ style:"currency",currency:pr.currencyCode||"JPY",maximumFractionDigits:0 }).format(Math.floor(pr.price/12)); } catch(e){ return ""; } };
+  const link=(label,url)=><button onClick={()=>openExternal(url)} style={{ background:"none",border:"none",padding:"6px 4px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:C.accent }}>{label}</button>;
+  const legalLinks=<div style={{ display:"flex",justifyContent:"center",flexWrap:"wrap",gap:4,marginTop:6 }}>{buyable&&!isPremium&&!done&&<button onClick={restore} disabled={busy} style={{ background:"none",border:"none",padding:"6px 4px",cursor:"pointer",fontFamily:"inherit",fontSize:12,color:C.accent }}>購入を復元</button>}{link("利用規約",DOCS_URL+"terms.html")}{link("プライバシーポリシー",DOCS_URL+"privacy.html")}</div>;
+  const perk=(t)=><div style={{ display:"flex",gap:9,alignItems:"flex-start",padding:"7px 0" }}><span style={{ width:20,height:20,borderRadius:10,background:C.accent+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1 }}><Ico n="check" s={12} c={C.accent}/></span><span style={{ fontSize:13.5,color:C.text,lineHeight:1.7 }}>{t}</span></div>;
+  const small={ fontSize:11.5,color:C.hint,lineHeight:1.9 };
+  const active=isPremium||done;
+  return (
+    <Modal title="プレミアムプラン" onClose={onClose}>
+      <div style={{ maxWidth:460,margin:"0 auto",padding:"8px 4px 24px" }}>
+        {active?(<>
+          <div style={{ textAlign:"center",padding:"18px 0 8px" }}>
+            <div style={{ width:52,height:52,borderRadius:26,background:C.accent+"18",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10 }}><Ico n="sparkle" s={24} c={C.accent}/></div>
+            <div style={{ fontFamily:C.display,fontSize:17,color:C.text,marginBottom:6 }}>{done&&!isPremium?"お申し込みありがとうございます":"プレミアムプランをご利用中です"}</div>
+            <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.9 }}>作品と画像の上限なしで保存でき、テーマ・書体・アプリアイコンの着せ替えも使えます。</div>
+          </div>
+          {msg&&<div style={{ fontSize:12.5,color:C.danger,lineHeight:1.8,textAlign:"center",margin:"8px 0" }}>{msg}</div>}
+          {buyable&&<div style={{ marginTop:14 }}><Btn full onClick={()=>openExternal(MANAGE_SUBS_URL)}>サブスクリプションを管理</Btn></div>}
+          <div style={{ ...small,marginTop:12,textAlign:"center" }}>登録内容の確認や解約は、iPhoneの「設定」→ 自分の名前 →「サブスクリプション」からもできます。</div>
+          {legalLinks}
+        </>):(<>
+          <div style={{ padding:"6px 2px 4px" }}>
+            {perk("作品の数と画像の枚数の上限がなくなります")}
+            {perk("テーマ・書体・アプリアイコンを着せ替えられます")}
+          </div>
+          {buyable?(<>
+            <div style={{ display:"flex",flexDirection:"column",gap:8,margin:"14px 0 12px" }}>
+              {plans===null&&<div style={{ ...small,textAlign:"center",padding:"18px 0" }}>読み込み中…</div>}
+              {plans&&plans.length===0&&<div style={{ fontSize:12.5,color:C.sub,lineHeight:1.9,textAlign:"center",padding:"12px 0" }}>プランを読み込めませんでした。通信状態を確かめて、開き直してください。</div>}
+              {plans&&plans.map((pkg,i)=>{ const on=pick===i; const annual=pkg.packageType==="ANNUAL"; return (
+                <button key={pkg.identifier} onClick={()=>setPick(i)} style={{ display:"flex",alignItems:"center",gap:12,padding:"14px",borderRadius:14,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"0f":C.surface,cursor:"pointer",fontFamily:"inherit",textAlign:"left",minHeight:60 }}>
+                  <span style={{ width:20,height:20,borderRadius:10,border:`1.5px solid ${on?C.accent:C.hint}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{on&&<span style={{ width:10,height:10,borderRadius:5,background:C.accent }}/>}</span>
+                  <span style={{ flex:1,minWidth:0 }}>
+                    <span style={{ display:"block",fontSize:14,color:C.text,fontWeight:600 }}>{annual?"年額":"月額"}</span>
+                    {annual&&perMonth(pkg)&&<span style={{ display:"block",fontSize:11.5,color:C.sub,marginTop:2 }}>{perMonth(pkg)}</span>}
+                  </span>
+                  <span style={{ fontSize:15,color:C.text,fontWeight:600 }}>{pkg.product.priceString}<span style={{ fontSize:11.5,color:C.sub,fontWeight:400 }}> / {annual?"年":"月"}</span></span>
+                </button>); })}
+            </div>
+            <button onClick={buy} disabled={busy||!plans||!plans.length} style={{ width:"100%",padding:"14px",borderRadius:12,border:"none",background:C.accent,color:C.accentFg,fontSize:14.5,fontWeight:600,fontFamily:"inherit",cursor:busy?"default":"pointer",opacity:(busy||!plans||!plans.length)?0.55:1,minHeight:50 }}>{busy?"手続き中…":"申し込む"}</button>
+            {msg&&<div style={{ fontSize:12.5,color:C.danger,lineHeight:1.8,textAlign:"center",marginTop:10 }}>{msg}</div>}
+          </>):(
+            <div style={{ fontSize:13,color:C.text,lineHeight:1.95,background:C.surface,border:`0.5px solid ${C.border}`,borderRadius:12,padding:"14px",margin:"14px 0" }}>プレミアムプランは、iPhoneアプリから申し込めます。申し込むと、Web版でもそのまま使えます。</div>
+          )}
+          <div style={{ fontSize:12,color:C.sub,lineHeight:1.95,marginTop:16 }}>いただいた料金は、作品を安全に保管するサーバーの運営と、アプリを続けていくために使わせていただきます。</div>
+          {buyable&&<div style={{ ...small,marginTop:10 }}>お支払いはApple IDに請求されます。期間が終わる24時間前までに解約しない限り、自動で更新されます。解約は、iPhoneの「設定」→ 自分の名前 →「サブスクリプション」からできます。</div>}
+          {legalLinks}
+        </>)}
+      </div>
+    </Modal>
+  );
+}
+
 // ===================== SETTINGS =====================
 const SITE_URL = "https://tsuzuloom.github.io/";
 const DOCS_URL = SITE_URL + "docs/";
@@ -3968,12 +4048,11 @@ const Toggle = ({ on }) => (
 function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark, serifHeads, fontKey, isPremium, onTheme, onDark, onSerif, onFont, email, userId, onLogout, onOpenTrash }) {
   const [delOpen,setDelOpen]=useState(false);
   const [mailOpen,setMailOpen]=useState(false);
-  const [premOpen,setPremOpen]=useState(false);
   const [iconName,setIconName]=useState(null);
   useEffect(()=>{ if(!isNativeApp()) return; AppIcon.getName().then(r=>setIconName((r&&r.value)||null)).catch(()=>{}); },[]);
   const ICONS=[{ key:null,label:"標準",img:"Default" },{ key:"AppIconSakura",label:"桜",img:"Sakura" },{ key:"AppIconWakakusa",label:"若草",img:"Wakakusa" },{ key:"AppIconYozora",label:"夜空",img:"Yozora" },{ key:"AppIconWashi",label:"和紙",img:"Washi" }];
   const pickIcon=async(k)=>{
-    if(k&&!isPremium){ setPremOpen(true); return; }
+    if(k&&!isPremium){ openPremium(); return; }
     try {
       if(k) await AppIcon.change({ name:k, suppressNotification:false });
       else await AppIcon.reset({ suppressNotification:false, disable:ICONS.filter(x=>x.key).map(x=>x.key) });
@@ -4028,7 +4107,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
   const account = (<>
     <SetGroup>
       <SetRow icon="person" label={email} sub="ログイン中のアカウント" last={!showPrem}/>
-      {showPrem&&<SetRow icon="sparkle" label="プラン" right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last={!(PLAN.enabled&&!isPremium&&usage)}/>}
+      {showPrem&&<SetRow icon="sparkle" label="プラン" onClick={()=>openPremium()} right={<span style={{ fontSize:12.5,color:isPremium?C.accent:C.sub,fontWeight:isPremium?600:400 }}>{isPremium?"プレミアム":"無料"}</span>} last={!(PLAN.enabled&&!isPremium&&usage)}/>}
       {PLAN.enabled&&!isPremium&&usage&&<>
         <SetRow icon="book" label="作品" right={<span style={{ fontSize:12.5,color:usage.stories>=PLAN.maxStories?C.danger:C.sub }}>{usage.stories} / {PLAN.maxStories}</span>}/>
         <SetRow icon="camera" label="画像" right={<span style={{ fontSize:12.5,color:usage.images>=PLAN.maxImages?C.danger:C.sub }}>{usage.images} / {PLAN.maxImages}</span>} last/>
@@ -4050,7 +4129,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       <div style={{ padding:"14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
           {Object.entries(THEMES).filter(([,t])=>showPrem||!t.premium).map(([key,t])=>{ const locked=t.premium&&!isPremium; const on=theme===key&&!locked; return (
-            <button key={key} onClick={()=>locked?setPremOpen(true):onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
+            <button key={key} onClick={()=>locked?openPremium():onTheme(key)} style={{ display:"flex",alignItems:"center",gap:8,padding:"11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44 }}>
               <div style={{ width:20,height:20,borderRadius:6,background:t.accentColor,flexShrink:0,border:`0.5px solid ${C.border}` }}/>
               <span style={{ fontSize:12.5,fontWeight:on?600:400,color:C.text }}>{t.label}</span>
               <div style={{ marginLeft:"auto",display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
@@ -4063,7 +4142,7 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       <div style={{ padding:"14px" }}>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
           {Object.entries(FONTS).filter(([,f])=>showPrem||!f.premium).map(([key,f])=>{ const locked=f.premium&&!isPremium; const on=fontKey===key&&!locked; return (
-            <button key={key} onClick={()=>{ if(locked){ setPremOpen(true); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
+            <button key={key} onClick={()=>{ if(locked){ openPremium(); return; } ensureFont(key); onFont(key); }} onMouseEnter={()=>ensureFont(key)} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,padding:"10px 11px",borderRadius:12,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accent+"12":C.bg,cursor:"pointer",fontFamily:"inherit",opacity:locked?0.6:1,minHeight:44,position:"relative",textAlign:"left" }}>
               <span style={{ fontSize:15,color:C.text,fontFamily:f.stack }}>物語を綴る</span>
               <span style={{ fontSize:10.5,color:C.sub }}>{f.label}</span>
               <div style={{ position:"absolute",top:9,right:10,display:"flex" }}>{locked?<Ico n="lock" s={13} c={C.hint}/>:on?<Ico n="check" s={14} c={C.accent}/>:null}</div>
@@ -4151,11 +4230,6 @@ function SettingsScreen({ usage, onShowIntro, page, onPage, onBack, theme, dark,
       </div>
       {delOpen&&<DeleteAccountDialog onClose={()=>setDelOpen(false)}/>}
       {mailOpen&&<ChangeEmailDialog current={email} onClose={()=>setMailOpen(false)}/>}
-      {premOpen&&(
-        <Modal compact title="プレミアム機能です" onClose={()=>setPremOpen(false)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setPremOpen(false)}>OK</Btn></>}>
-          <div style={{ fontSize:13,color:C.text,lineHeight:1.95 }}>このテーマ・書体・アイコンは、プレミアムプランで使えるようになります。<br/><span style={{ color:C.sub,fontSize:12 }}>プレミアムプランは現在準備中です。始まったら、アプリ内でお知らせします。</span></div>
-        </Modal>
-      )}
     </div>
   );
 }
@@ -4220,6 +4294,16 @@ function App() {
   const [isPremium,setIsPremium]=useState(localStorage.getItem("tl_prem")==="1");
   const metaSettingsRef=useRef({});
   const [limitBox,setLimitBox]=useState(null);   // "stories" | "images"
+  const [premOpen,setPremOpen]=useState(false);
+  openPremium=()=>setPremOpen(true);
+  // entitlements の行から、いまプレミアムかどうかを決めて覚える
+  const applyEntitlement=(ent)=>{ const prem=!!(ent&&ent.premium&&(!ent.expires_at||Date.parse(ent.expires_at)>Date.now())); setIsPremium(prem); localStorage.setItem("tl_prem",prem?"1":"0"); return prem; };
+  // App Store の購読状態をサーバーに反映してもらい、結果を読み直す
+  const syncPremium=async(uid)=>{
+    try { await db.functions.invoke("revenuecat-sync",{ body:{} }); } catch(e){ console.warn("sync",e); }
+    const r=await db.from("entitlements").select("premium,expires_at,source").eq("user_id",uid).maybeSingle();
+    return r.error?null:applyEntitlement(r.data);
+  };
   // アップデートのお知らせ：前に開いたバージョンと違い、お知らせが用意されていれば1回だけ出す
   const [newsOpen,setNewsOpen]=useState(()=>{ try {
     const seen=localStorage.getItem(SEEN_KEY);
@@ -4244,7 +4328,7 @@ function App() {
   },[]);
 
   useEffect(()=>{
-    if(!session){ setStories(null); setOpenId(null); setOpenData(null); setIdeas([]); return; }
+    if(!session){ setStories(null); setOpenId(null); setOpenData(null); setIdeas([]); stopPurchases(); return; }
     (async()=>{
       // 端末に控えてある一覧があれば、通信を待たずにまず出す
       try { const cached=await localDB.get("kv", `${session.user.id}:list`); if(cached&&Array.isArray(cached)) setStories(prev=>prev||cached); } catch(e){}
@@ -4252,7 +4336,7 @@ function App() {
         // 設定・プラン・作品一覧は、順番待ちせずに同時に取りにいく
         const [metaR, entR, rowsR] = await Promise.all([
           db.from("user_meta").select("*").eq("user_id",session.user.id).maybeSingle(),
-          db.from("entitlements").select("premium,expires_at").eq("user_id",session.user.id).maybeSingle(),
+          db.from("entitlements").select("premium,expires_at,source").eq("user_id",session.user.id).maybeSingle(),
           db.from("stories").select("id,title,sort_order,updated_at,summary").eq("user_id",session.user.id).is("deleted_at",null).order("sort_order",{ascending:true}),
         ]);
         if(metaR.error) throw metaR.error;
@@ -4262,9 +4346,14 @@ function App() {
         setIdeas(meta.ideas||[]);
         metaSettingsRef.current = meta.settings||{};
         if(!entR.error){
-          const ent=entR.data;
-          const prem = !!(ent&&ent.premium&&(!ent.expires_at||Date.parse(ent.expires_at)>Date.now()));
-          setIsPremium(prem); localStorage.setItem("tl_prem",prem?"1":"0");
+          const prem=applyEntitlement(entR.data);
+          // iPhone アプリでは App Store 側の状態と食い違っていないか確かめ、違えばサーバーに反映し直す（待たない）
+          if(canPurchase()) (async()=>{ try {
+            await startPurchases(session.user.id);
+            const sp=await storePremium();
+            const fromStore=!entR.data||entR.data.source!=="owner";
+            if(sp===true&&!prem || sp===false&&prem&&fromStore) await syncPremium(session.user.id);
+          } catch(e){ console.warn("purchases",e); } })();
         }
         if(meta.settings&&meta.settings.fontKey&&FONTS[meta.settings.fontKey]){ setFontKey(meta.settings.fontKey); localStorage.setItem("tl_font",meta.settings.fontKey); }
         if(meta.settings){ if(meta.settings.theme){ setTheme(meta.settings.theme); localStorage.setItem("sc_theme",meta.settings.theme);} if(typeof meta.settings.darkMode==="boolean"){ setDark(meta.settings.darkMode); localStorage.setItem("sc_dark",meta.settings.darkMode?"1":"0"); } if(typeof meta.settings.serifHeads==="boolean"){ setSerifHeads(meta.settings.serifHeads); localStorage.setItem("tl_serif",meta.settings.serifHeads?"1":"0"); } }
@@ -4604,7 +4693,8 @@ function App() {
   return (
     <div style={{ height:"100%",maxWidth:isDesktop?"none":480,margin:"0 auto",background:C.bg,position:"relative",overflow:"hidden" }}>
       {screen==="list"&&loadError&&stories.length===0&&<ErrorPane text={loadError} onRetry={()=>window.location.reload()}/>}
-      {limitBox&&<Modal compact title="無料プランでは、ここまで使えます" onClose={()=>setLimitBox(null)} footer={<><div style={{ flex:1 }}/><Btn variant="primary" onClick={()=>setLimitBox(null)}>OK</Btn></>}>
+      {premOpen&&session&&<PremiumScreen isPremium={isPremium} userId={session.user.id} onClose={()=>setPremOpen(false)} onSync={()=>syncPremium(session.user.id)}/>}
+      {limitBox&&<Modal compact title="無料プランでは、ここまで使えます" onClose={()=>setLimitBox(null)} footer={<><div style={{ flex:1 }}/><Btn onClick={()=>setLimitBox(null)}>閉じる</Btn><Btn variant="primary" onClick={()=>{ setLimitBox(null); setPremOpen(true); }}>プレミアムプランを見る</Btn></>}>
         <div style={{ fontSize:13,color:C.text,lineHeight:1.95 }}>作品は{PLAN.maxStories}作、画像は{PLAN.maxImages}枚まで、無料で保存できます。<br/>今ある作品や画像は、これまでどおり見たり書き足したりできるので、安心してくださいね。</div>
         <div style={{ fontSize:12.5,color:C.sub,lineHeight:1.95,marginTop:10 }}>これより多く{limitBox==="images"?"画像を":"作品を"}保存したいときは、プレミアムプランをご検討ください。いただいた料金は、作品を安全に保管するサーバーの運営に使い、アプリを長く続けていくための支えにさせていただきます。</div>
       </Modal>}
